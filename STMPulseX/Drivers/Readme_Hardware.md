@@ -1,6 +1,7 @@
 # 🔌 Hardware Integration & Driver Reference (`Drivers/`)
 
 [![HAL Library](https://img.shields.io/badge/HAL-STM32WBxx%20v1.17+-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-v0.1.1--Pre--BLE-blue.svg)]()
 [![CMSIS](https://img.shields.io/badge/CMSIS-Core%20v5.6+-brightgreen.svg)](https://arm-software.github.io/CMSIS_5/)
 [![Hardware](https://img.shields.io/badge/Bus-I2C%20Fast--Mode-orange.svg)]()
 

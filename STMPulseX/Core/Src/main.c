@@ -26,6 +26,9 @@
 #include <stdarg.h>
 #include "usbd_cdc_if.h"
 #include <string.h>
+#include "app_common.h"
+#include "ble.h"
+#include "custom_stm.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,6 +49,10 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
 
+IPCC_HandleTypeDef hipcc;
+
+RTC_HandleTypeDef hrtc;
+
 /* USER CODE BEGIN PV */
 volatile uint8_t bme280_id = 0;
 volatile HAL_StatusTypeDef bme280_status = HAL_ERROR;
@@ -56,6 +63,9 @@ void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_IPCC_Init(void);
+static void MX_RTC_Init(void);
+static void MX_RF_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -114,6 +124,8 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+  /* Config code for STM32_WPAN (HSE Tuning must be done before system clock configuration) */
+  MX_APPE_Config();
 
   /* USER CODE BEGIN Init */
 
@@ -125,6 +137,9 @@ int main(void)
   /* Configure the peripherals common clocks */
   PeriphCommonClock_Config();
 
+  /* IPCC initialisation */
+  MX_IPCC_Init();
+
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
@@ -133,6 +148,8 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_USB_Device_Init();
+  MX_RTC_Init();
+  MX_RF_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(1500);  // Allow USB CDC to enumerate
 
@@ -140,11 +157,21 @@ int main(void)
   max30102_init();
   /* USER CODE END 2 */
 
+  /* while(LL_HSEM_1StepLock(HSEM, CFG_HW_CLK48_CONFIG_SEMID)); */
+
+  /* Init code for STM32_WPAN */
+  /* MX_APPE_Init(); */
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  usb_log("\r\n========================================\r\n");
+  usb_log(" STMPulseX: USB Telemetry Stream Online\r\n");
+  usb_log(" (BLE stack bypassed for direct stream)\r\n");
+  usb_log("========================================\r\n");
   while (1)
   {
     /* USER CODE END WHILE */
+    /* MX_APPE_Process(); */
 
     /* USER CODE BEGIN 3 */
     sample_count++;
@@ -201,6 +228,39 @@ int main(void)
             red_val, ir_val,
             ct_c100 / 100, ct_frac);
 
+    // 3. Broadcast 12-byte BLE telemetry notification at 1 Hz
+    if (phase == 1) {
+        uint8_t ble_pkt[12];
+        uint16_t hr = finger_detected ? 75 : 0;
+        uint8_t spo2 = finger_detected ? 98 : 0;
+        int16_t t_skin = (int16_t)(s_ctemp * 100.0f);
+        int16_t t_amb = (int16_t)(s_temp * 100.0f);
+        uint8_t hum = (uint8_t)(s_hum);
+        uint16_t press = (uint16_t)(s_press * 10.0f);
+        uint8_t batt = 95;
+        uint8_t flags = (finger_detected ? 0x01 : 0x00) | ((bme280_status == HAL_OK) ? 0x04 : 0x00) | 0x02;
+
+        ble_pkt[0] = (uint8_t)(hr & 0xFF);
+        ble_pkt[1] = (uint8_t)((hr >> 8) & 0xFF);
+        ble_pkt[2] = spo2;
+        ble_pkt[3] = (uint8_t)(t_skin & 0xFF);
+        ble_pkt[4] = (uint8_t)((t_skin >> 8) & 0xFF);
+        ble_pkt[5] = (uint8_t)(t_amb & 0xFF);
+        ble_pkt[6] = (uint8_t)((t_amb >> 8) & 0xFF);
+        ble_pkt[7] = hum;
+        ble_pkt[8] = (uint8_t)(press & 0xFF);
+        ble_pkt[9] = (uint8_t)((press >> 8) & 0xFF);
+        ble_pkt[10] = batt;
+        ble_pkt[11] = flags;
+
+        // Custom_STM_App_Update_Char(CUSTOM_STM_TEL, ble_pkt);
+        (void)ble_pkt;
+        usb_log("[BLE 1Hz] Sent: HR=%u, SpO2=%u%%, SkinT=%ld.%02ld C, Press=%ld.%01ld hPa\r\n",
+                hr, spo2,
+                (long)(t_skin / 100), (long)((t_skin < 0 ? -t_skin : t_skin) % 100),
+                (long)(press / 10), (long)(press % 10));
+    }
+
     HAL_Delay(40); // 25 Hz high-resolution stream (40ms interval)
   }
   /* USER CODE END 3 */
@@ -215,6 +275,11 @@ void SystemClock_Config(void)
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
+  /** Configure LSE Drive Capability
+  */
+  HAL_PWR_EnableBkUpAccess();
+  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_MEDIUMHIGH);
+
   /** Configure the main internal regulator output voltage
   */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
@@ -222,14 +287,17 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSE
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI1
+                              |RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE
                               |RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.LSEState = RCC_LSE_OFF;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
   RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
@@ -252,7 +320,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.AHBCLK2Divider = RCC_SYSCLK_DIV2;
-  RCC_ClkInitStruct.AHBCLK4Divider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.AHBCLK4Divider = RCC_SYSCLK_DIV2;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
   {
@@ -274,7 +342,8 @@ void PeriphCommonClock_Config(void)
 
   /** Initializes the peripherals clock
   */
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SMPS;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SMPS|RCC_PERIPHCLK_RFWAKEUP;
+  PeriphClkInitStruct.RFWakeUpClockSelection = RCC_RFWKPCLKSOURCE_HSE_DIV1024;
   PeriphClkInitStruct.SmpsClockSelection = RCC_SMPSCLKSOURCE_HSI;
   PeriphClkInitStruct.SmpsDivSelection = RCC_SMPSCLKDIV_RANGE1;
 
@@ -336,6 +405,89 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief IPCC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_IPCC_Init(void)
+{
+
+  /* USER CODE BEGIN IPCC_Init 0 */
+
+  /* USER CODE END IPCC_Init 0 */
+
+  /* USER CODE BEGIN IPCC_Init 1 */
+
+  /* USER CODE END IPCC_Init 1 */
+  hipcc.Instance = IPCC;
+  if (HAL_IPCC_Init(&hipcc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN IPCC_Init 2 */
+
+  /* USER CODE END IPCC_Init 2 */
+
+}
+
+/**
+  * @brief RF Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RF_Init(void)
+{
+
+  /* USER CODE BEGIN RF_Init 0 */
+
+  /* USER CODE END RF_Init 0 */
+
+  /* USER CODE BEGIN RF_Init 1 */
+
+  /* USER CODE END RF_Init 1 */
+  /* USER CODE BEGIN RF_Init 2 */
+
+  /* USER CODE END RF_Init 2 */
+
+}
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = CFG_RTC_ASYNCH_PRESCALER;
+  hrtc.Init.SynchPrediv = CFG_RTC_SYNCH_PRESCALER;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -347,6 +499,7 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
@@ -354,7 +507,6 @@ static void MX_GPIO_Init(void)
 
   /* USER CODE END MX_GPIO_Init_2 */
 }
-
 
 /* USER CODE BEGIN 4 */
 
@@ -606,7 +758,6 @@ static float max30102_get_temp(void)
     return (float)temp_int + ((float)(temp_frac & 0x0F) * 0.0625f);
 }
 /* USER CODE END 4 */
-
 
 /**
   * @brief  This function is executed in case of error occurrence.

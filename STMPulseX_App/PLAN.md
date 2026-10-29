@@ -6,26 +6,87 @@
 
 ## 🎯 Objectives & Milestones
 
-1. **Phase 1: STM32WB55 BLE Firmware Bringup**
-   * Enable BLE stack on STM32WB55 (`STM32_WPAN`).
-   * Advertise as `STMPulseX`.
-   * Create custom GATT Service & Characteristic for sensor telemetry notifications.
-   * Send simulated / live sensor readings packed into a clean binary payload.
+1. **Phase 0: Hardware Debugger Bringup (ST-Link Coprocessor Flash) — [TOMORROW]**
+   * Wire ST-Link (SWD) to STM32WB55 Ubyte EVAL board.
+   * Verify FUS (Firmware Upgrade Service) state via ST-Link in STM32CubeProgrammer.
+   * Flash `stm32wb5x_BLE_Stack_full_fw.bin` into CPU2 secure flash (`0x080CE000`).
+   * Re-enable BLE initialization in `Core/Src/main.c` and flash `STMPulseX.elf`.
 
-2. **Phase 2: Smartphone Verification (Smoke Test)**
+2. **Phase 1: Smartphone Verification (Smoke Test)**
    * Scan, connect, and subscribe using **nRF Connect for Mobile**.
    * Confirm raw byte frames arrive reliably at 1 Hz without disconnection.
 
-3. **Phase 3: Minimal Skeleton Android App (POC)**
+3. **Phase 2: Minimal Skeleton Android App (POC)**
    * Single-screen Android app (Kotlin).
    * Request Bluetooth runtime permissions (`BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`).
    * Auto-scan or tap "Connect" to link with `STMPulseX`.
    * Parse the binary payload.
    * Display all telemetry live on screen (BPM, SpO₂, Temps, Humidity, Pressure, Battery, Flags).
 
-4. **Phase 4: Handover to Friend**
+4. **Phase 3: Handover to Friend**
    * Document the BLE Interface Contract (UUIDs, byte offsets, data types).
    * Hand over the verified, building Android project as the starting baseline for the full Jetpack Compose UI, Room DB history, and graphs.
+
+---
+
+## ⚡ Phase 0: ST-Link Bringup Guide (Tomorrow's Hardware Procedure)
+
+### 1. SWD Pinout Connections (Only 4 Wires)
+Connect the borrowed ST-Link V2 (or Nucleo ST-Link header) to the STM32WB55 board pins:
+
+| ST-Link Pin | STM32WB55 Board Pin | Notes |
+| :--- | :--- | :--- |
+| **SWCLK** | **SWCLK** (PA14) | Hardware clock line |
+| **SWDIO** | **SWDIO** (PA13) | Bi-directional debug data |
+| **GND** | **GND** | Common reference ground |
+| **3.3V** | **3.3V** | ST-Link target voltage reference (or keep board USB plugged in) |
+| *NRST (Optional)* | *RST* | Hardware reset line (recommended if available) |
+
+---
+
+### 2. Flashing the Wireless Coprocessor (CPU2 BLE Stack)
+
+1. **Connect ST-Link to PC** via USB, keep board wired to ST-Link.
+2. Launch **STM32CubeProgrammer**:
+   * Set interface dropdown (top-right) from `USB` $\rightarrow$ **`ST-LINK`**.
+   * Mode: `Normal` (or `Under Reset`).
+   * Reset mode: `Software reset`.
+   * Frequency: `4000 kHz`.
+   * Click **Connect** (Direct hardware CoreSight DAP connection established immediately).
+3. **Verify FUS (Firmware Upgrade Service)**:
+   * Click the **Firmware Upgrade Services** icon (antenna icon on the left navigation bar).
+   * Click **Read FUS infos**.
+   * Status will report `FUS_IDLE` with `FUS Version: v2.2.0.0`.
+4. **Flash the BLE Stack Binary**:
+   * Click **Browse** under Firmware Upgrade.
+   * Select:
+     ```text
+     C:\Users\vishn\STM32Cube\Repository\STM32Cube_FW_WB_V1.24.0\Projects\STM32WB_Coprocessor_Wireless_Binaries\STM32WB5x\stm32wb5x_BLE_Stack_full_fw.bin
+     ```
+   * Ensure *Start address automatic determination* is checked (or specify `0x080CE000`).
+   * Click **Firmware Upgrade**.
+   * Operation takes ~10–15 seconds and prints:
+     `Firmware Upgrade Success`
+5. **Re-read Coprocessor Info**:
+   * Click **Read FUS infos** again.
+   * Confirm: `STACK Version: v1.24.0.x` is active at `0x080CE000`.
+
+---
+
+### 3. Re-enable BLE in Firmware & Flash
+
+Once CPU2 has the BLE stack:
+1. Open [`Core/Src/main.c`](file:///c:/Users/vishn/Projects/STM/STMPulseX/Core/Src/main.c):
+   * Uncomment line 160: `while(LL_HSEM_1StepLock(HSEM, CFG_HW_CLK48_CONFIG_SEMID));`
+   * Uncomment line 163: `MX_APPE_Init();`
+   * Uncomment line 174: `MX_APPE_Process();`
+   * Uncomment line 256: `Custom_STM_App_Update_Char(CUSTOM_STM_TEL, ble_pkt);`
+2. Rebuild project:
+   ```cmd
+   cmd.exe /c "C:\Users\vishn\Projects\STM\build.bat"
+   ```
+3. Flash `STMPulseX.elf` via ST-Link in STM32CubeProgrammer at address `0x08000000`.
+4. Disconnect ST-Link, boot board normally. CPU1 and CPU2 will synchronize and begin advertising as `STMPulseX` while continuing 25 Hz USB CDC telemetry.
 
 ---
 
@@ -36,8 +97,8 @@
 | Parameter | Value | Notes |
 | :--- | :--- | :--- |
 | **Advertised Device Name** | `STMPulseX` | Filter for this during BLE scanning |
-| **Telemetry Service UUID** | `19B10000-E8F2-537E-4F6C-D104768A1214` | Custom 128-bit Service |
-| **Telemetry Char UUID** | `19B10001-E8F2-537E-4F6C-D104768A1214` | Properties: **NOTIFY**, **READ** |
+| **Telemetry Service UUID** | `00000001-cc7a-482a-984a-7f2ed5b3e58f` | Custom 128-bit Service |
+| **Telemetry Char UUID** | `00000002-8e22-4541-9d4c-21edae82ed19` | Properties: **NOTIFY**, **READ** |
 | **Update Frequency** | `1.0 Hz` | 1 notification packet per second |
 
 ### Binary Packet Structure (12 Bytes Total)
@@ -60,7 +121,7 @@ To guarantee that packets fit into the standard default BLE ATT MTU (23 bytes, 2
 ## 🛠 2. Tooling & Environment Setup (Your PC)
 
 * [x] **STM32CubeIDE 2.2.0**: Used for building and debugging the STM32WB55 firmware.
-* [x] **STM32CubeProgrammer**: Used for flashing the BLE wireless coprocessor stack (`stm32wb5x_BLE_Stack_full_fw.bin`) to CPU2 if needed.
+* [x] **STM32CubeProgrammer**: Used for flashing the BLE wireless coprocessor stack (`stm32wb5x_BLE_Stack_full_fw.bin`) to CPU2 via ST-Link.
 * [ ] **Android Studio** (Install via `winget install Google.AndroidStudio`): Used to scaffold and run the minimal skeleton Kotlin app.
 * [ ] **Physical Android Smartphone**:
   * Developer Mode & USB Debugging enabled.
@@ -70,24 +131,15 @@ To guarantee that packets fit into the standard default BLE ATT MTU (23 bytes, 2
 
 ## 📋 3. Step-by-Step Execution Plan
 
-### Step 1: STM32WB55 BLE Firmware Configuration
-1. Inspect `STMPulseX.ioc` in STM32CubeMX / CubeIDE.
-2. Verify CPU2 (Cortex-M0+) wireless coprocessor stack status.
-3. Enable `STM32_WPAN` middleware in BLE Peripheral mode.
-4. Set device broadcast name to `STMPulseX`.
-5. Implement the custom GATT service & characteristic in `custom_stm.c` / `app_ble.c`.
-6. Start advertising on boot.
-7. Set up a periodic 1-second timer that pushes mock/live 12-byte telemetry frames via GATT notification.
-
-### Step 2: Smoke Testing with nRF Connect
+### Step 1: Smoke Testing with nRF Connect
 1. Power up the STM32WB55 board.
 2. Launch **nRF Connect** on your Android phone.
 3. Scan for `STMPulseX` and check signal RSSI.
 4. Tap **Connect** $\rightarrow$ Explore the GATT Service table.
-5. Tap the three-arrow icon (**Enable Notifications**) on the Telemetry characteristic (`...-0001`).
-6. Confirm hexadecimal byte streams increment every second.
+5. Tap the three-arrow icon (**Enable Notifications**) on the Telemetry characteristic (`...-0002`).
+6. Confirm hexadecimal 12-byte stream increments every second.
 
-### Step 3: Minimal Skeleton Android App
+### Step 2: Minimal Skeleton Android App
 Build a clean, bare-bones Kotlin project in `STMPulseX_App/`:
 * **Permissions Helper**: Requests `BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT` (Android 12+ / API 31+) and fine location for older versions.
 * **BLE Scanner & Connector**: Simple callback-based or Coroutine-based `BluetoothGattCallback` connecting to `STMPulseX`.
@@ -109,7 +161,7 @@ Build a clean, bare-bones Kotlin project in `STMPulseX_App/`:
   * One "Connect" / "Disconnect" button
   * Text fields displaying each live parsed value.
 
-### Step 4: Verification & Handover
+### Step 3: Verification & Handover
 1. Run the skeleton app on your phone via USB debugging.
 2. Tap "Connect", place finger on the wearable sensor, and watch the numbers update on your phone.
 3. Commit and push the code.

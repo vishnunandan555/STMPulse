@@ -26,6 +26,22 @@
   padding: 0;
 }
 
+/* Custom Sleek Dark Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: #232d3d;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #388bfd;
+}
+
 body {
   font-family: var(--font-main);
   background: var(--bg);
@@ -40,11 +56,11 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 14px;
 }
 
 .brand-wrap h1 {
@@ -66,17 +82,19 @@ header {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-/* Navigation Tabs */
+/* Primary Navigation Tabs — Center Aligned */
 .tab-nav {
   display: flex;
-  gap: 6px;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
   background: var(--panel-bg);
-  padding: 4px;
-  border-radius: 8px;
+  padding: 5px 8px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   margin-bottom: 18px;
   overflow-x: auto;
@@ -86,7 +104,7 @@ header {
   background: transparent;
   color: var(--text-dim);
   border: none;
-  padding: 8px 16px;
+  padding: 7px 16px;
   font-size: 13px;
   font-weight: 600;
   border-radius: 6px;
@@ -127,22 +145,24 @@ header {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Session Statistics Banner */
+/* Session Statistics Banner — Center Aligned */
 .session-stats-bar {
   display: flex;
-  gap: 18px;
+  justify-content: center;
   align-items: center;
+  gap: 24px;
   background: var(--panel-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 16px;
+  border-radius: 10px;
+  padding: 10px 20px;
   margin-bottom: 18px;
   font-size: 12px;
   flex-wrap: wrap;
+  position: relative;
 }
 
 .stat-item {
-  display: flex;
+  display: inline-flex;
   gap: 6px;
   align-items: center;
 }
@@ -165,8 +185,8 @@ header {
   background: var(--card-bg);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 4px;
-  padding: 3px 10px;
+  border-radius: 6px;
+  padding: 4px 12px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -179,3 +199,10 @@ header {
   border-color: var(--border-focus);
 }
 
+@media (min-width: 1100px) {
+  .btn-stat-reset {
+    position: absolute;
+    right: 14px;
+    margin-left: 0;
+  }
+}

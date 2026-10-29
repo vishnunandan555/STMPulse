@@ -1,40 +1,40 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>STMPulseX â€” Developer Biosignal Suite & Diagnostic Testbed</title>
-  <link rel="stylesheet" href="css/main.css?v=2.2">
-  <link rel="stylesheet" href="css/components.css?v=2.2">
+  <title>STMPulseX — Developer Biosignal Suite & Diagnostic Testbed</title>
+  <link rel="stylesheet" href="css/main.css?v=2.4">
+  <link rel="stylesheet" href="css/components.css?v=2.4">
 </head>
 <body>
 
   <!-- Top Header & Global Controls Toolbar -->
   <header>
     <div class="brand-wrap">
-      <h1>ðŸ«€ STMPulseX Biosignal Suite</h1>
+      <h1>🫀 STMPulseX Biosignal Suite</h1>
       <p>Developer Telemetry Testbed &amp; Signal Validation Engine (25 Hz)</p>
     </div>
 
     <div class="toolbar">
-      <div style="display: flex; gap: 4px; align-items: center; background: #161b22; padding: 3px; border-radius: 6px; border: 1px solid var(--border);">
-        <span style="font-size: 11px; color: var(--text-dim); margin: 0 6px;">SPEED:</span>
+      <div class="segmented-control">
+        <span class="segmented-label">SPEED</span>
         <button class="btn btn-secondary" id="speedSlowBtn" onclick="setSpeed(0.5)">0.5x</button>
         <button class="btn btn-secondary active" id="speedNormalBtn" onclick="setSpeed(1.0)">1.0x</button>
         <button class="btn btn-secondary" id="speedFastBtn" onclick="setSpeed(2.0)">2.0x</button>
-        <button class="btn btn-secondary" id="speedMaxBtn" onclick="setSpeed('max')" title="Real-time Max Speed (~1 sec sweep)">âš¡ MAX</button>
+        <button class="btn btn-secondary" id="speedMaxBtn" onclick="setSpeed('max')" title="Real-time Max Speed (~1 sec sweep)">⚡ MAX</button>
       </div>
 
-      <div style="display: flex; gap: 4px; align-items: center; background: #161b22; padding: 3px; border-radius: 6px; border: 1px solid var(--border);">
-        <span style="font-size: 11px; color: var(--text-dim); margin: 0 6px;">WINDOW:</span>
-        <button class="btn btn-secondary" id="winLowBtn" onclick="setWindow('low')" title="Low / Zoomed (60 samples ~2.4s) â€” High sensitivity">Low (2.4s)</button>
-        <button class="btn btn-secondary" id="winMedBtn" onclick="setWindow('med')" title="Medium (150 samples ~6s) â€” Balanced physiological view">Med (6s)</button>
-        <button class="btn btn-secondary active" id="winHighBtn" onclick="setWindow('high')" title="High (300 samples ~12s) â€” Wide baseline tracking">High (12s)</button>
+      <div class="segmented-control">
+        <span class="segmented-label">WINDOW</span>
+        <button class="btn btn-secondary" id="winLowBtn" onclick="setWindow('low')" title="Low / Zoomed (60 samples ~2.4s) — High sensitivity">Low (2.4s)</button>
+        <button class="btn btn-secondary" id="winMedBtn" onclick="setWindow('med')" title="Medium (150 samples ~6s) — Balanced physiological view">Med (6s)</button>
+        <button class="btn btn-secondary active" id="winHighBtn" onclick="setWindow('high')" title="High (300 samples ~12s) — Wide baseline tracking">High (12s)</button>
       </div>
 
-      <button class="btn btn-pause" id="pauseBtn" onclick="togglePause()">â¸ Pause</button>
-      <button class="btn btn-secondary" id="audioBtn" onclick="toggleAudio()" title="Toggle clinical pulse audio beep">ðŸ”‡ Beep: Off</button>
-      <button class="btn btn-secondary" id="csvBtn" onclick="exportCSV()" title="Download session telemetry data as CSV">ðŸ“¥ Export CSV</button>
+      <button class="btn btn-pause" id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
+      <button class="btn btn-secondary" id="audioBtn" onclick="toggleAudio()" title="Toggle clinical pulse audio beep">🔇 Beep: Off</button>
+      <button class="btn btn-secondary" id="csvBtn" onclick="exportCSV()" title="Download session telemetry data as CSV">📥 Export CSV</button>
 
       <div class="status-badge">
         <span class="dot" id="statusDot"></span>
@@ -46,23 +46,23 @@
 
   <!-- Live Session Statistics Banner -->
   <div class="session-stats-bar">
-    <div class="stat-item"><span class="stat-label">â± SESSION:</span> <span class="stat-val" id="statElapsed">00:00</span></div>
-    <div class="stat-item"><span class="stat-label">â¤ï¸ HR RANGE:</span> <span class="stat-val" id="statHRRange">-- (Avg --)</span></div>
-    <div class="stat-item"><span class="stat-label">ðŸ’“ PULSES:</span> <span class="stat-val" id="statBeats">0</span></div>
-    <div class="stat-item"><span class="stat-label">ðŸ©¸ AVG SpOâ‚‚:</span> <span class="stat-val" id="statAvgSpO2">--%</span></div>
-    <div class="stat-item"><span class="stat-label">ðŸ« BREATHS:</span> <span class="stat-val" id="statBreaths">0</span></div>
-    <div class="stat-item"><span class="stat-label">âš¡ TELEMETRY:</span> <span class="stat-val" id="statPackets">0 pkts</span></div>
-    <button class="btn-stat-reset" onclick="resetSessionStats()" title="Reset session counters">ðŸ”„ Reset Stats</button>
+    <div class="stat-item"><span class="stat-label">⏱ SESSION:</span> <span class="stat-val" id="statElapsed">00:00</span></div>
+    <div class="stat-item"><span class="stat-label">❤️ HR RANGE:</span> <span class="stat-val" id="statHRRange">-- (Avg --)</span></div>
+    <div class="stat-item"><span class="stat-label">💓 PULSES:</span> <span class="stat-val" id="statBeats">0</span></div>
+    <div class="stat-item"><span class="stat-label">🩸 AVG SpO₂:</span> <span class="stat-val" id="statAvgSpO2">--%</span></div>
+    <div class="stat-item"><span class="stat-label">🫁 BREATHS:</span> <span class="stat-val" id="statBreaths">0</span></div>
+    <div class="stat-item"><span class="stat-label">⚡ TELEMETRY:</span> <span class="stat-val" id="statPackets">0 pkts</span></div>
+    <button class="btn-stat-reset" onclick="resetSessionStats()" title="Reset session counters">🔄 Reset Stats</button>
   </div>
 
   <!-- Primary Navigation Tabs -->
   <nav class="tab-nav">
-    <button class="tab-btn active" data-tab="tab-overview">ðŸŒ Central Overview</button>
-    <button class="tab-btn" data-tab="tab-cardio">ðŸ«€ Cardio &amp; Autonomic Lab</button>
-    <button class="tab-btn" data-tab="tab-respiration">ðŸ« Pulmonary &amp; Respiration</button>
-    <button class="tab-btn" data-tab="tab-optics">ðŸ”¬ Raw Optics &amp; PI</button>
-    <button class="tab-btn" data-tab="tab-environment">ðŸŒ¡ï¸ Environmental &amp; Thermals</button>
-    <button class="tab-btn" data-tab="tab-telemetry">âš¡ Telemetry &amp; Logs</button>
+    <button class="tab-btn active" data-tab="tab-overview">🌐 Central Overview</button>
+    <button class="tab-btn" data-tab="tab-cardio">🫀 Cardio &amp; Autonomic Lab</button>
+    <button class="tab-btn" data-tab="tab-respiration">🫁 Pulmonary &amp; Respiration</button>
+    <button class="tab-btn" data-tab="tab-optics">🔬 Raw Optics &amp; PI</button>
+    <button class="tab-btn" data-tab="tab-environment">🌡️ Environmental &amp; Thermals</button>
+    <button class="tab-btn" data-tab="tab-telemetry">⚡ Telemetry &amp; Logs</button>
   </nav>
 
   <!-- Main Container -->
@@ -83,7 +83,7 @@
           <div class="subtext" id="subBPM">Peak intervals</div>
         </div>
         <div class="card">
-          <div class="label">SpOâ‚‚ (Oxygen)</div>
+          <div class="label">SpO₂ (Oxygen)</div>
           <div class="value" style="color: #3fb950;"><span id="valSpO2">--</span> <span class="unit">%</span></div>
           <div class="subtext" id="subSpO2">Normal: 95-100%</div>
         </div>
@@ -101,18 +101,18 @@
           <div class="label">Respiration Rate</div>
           <div class="value" style="color: var(--orange);"><span id="valResp">--</span> <span class="unit">BrPM</span></div>
           <div class="subtext" id="subResp">Ready to detect</div>
-          <div style="margin-top: 8px; height: 4px; background: #21262d; border-radius: 2px; overflow: hidden;">
-            <div id="breathBar" style="height: 100%; width: 50%; background: var(--orange); transition: width 0.12s linear;"></div>
+          <div class="breath-bar-track">
+            <div id="breathBar" class="breath-bar-fill"></div>
           </div>
         </div>
         <div class="card">
           <div class="label">Skin / Sensor Temp</div>
-          <div class="value" style="color: #e3b341;"><span id="valSkinTemp">--</span> <span class="unit">Â°C</span></div>
+          <div class="value" style="color: #e3b341;"><span id="valSkinTemp">--</span> <span class="unit">°C</span></div>
           <div class="subtext" id="subSkinTemp">Requires flash</div>
         </div>
         <div class="card">
           <div class="label">Ambient Temp</div>
-          <div class="value"><span id="valTemp">--</span> <span class="unit">Â°C</span></div>
+          <div class="value"><span id="valTemp">--</span> <span class="unit">°C</span></div>
           <div class="subtext">BME280 Air</div>
         </div>
         <div class="card">
@@ -143,7 +143,7 @@
           <div class="chart-title">Respiration Waveform (Respiratory Sinus Arrhythmia - Breath Wave)</div>
           <div class="legend">
             <div class="legend-item"><span class="legend-color" style="background: #2ea043;"></span> Thoracic Breath Wave</div>
-            <div style="color: var(--text-dim);">0.15â€“0.35 Hz Low-Pass Filtered | Live Inhale &amp; Exhale</div>
+            <div style="color: var(--text-dim);">0.15–0.35 Hz Low-Pass Filtered | Live Inhale &amp; Exhale</div>
           </div>
         </div>
         <div class="canvas-wrap">
@@ -156,7 +156,7 @@
       <div class="analysis-panel">
         <div class="widget-card">
           <div class="widget-header">
-            <div class="widget-title">SpOâ‚‚ Clinical Saturation Range</div>
+            <div class="widget-title">SpO₂ Clinical Saturation Range</div>
             <div class="widget-badge" id="spo2Badge">Awaiting Finger</div>
           </div>
           <div class="meter-bar-container">
@@ -166,15 +166,15 @@
               <div class="meter-seg seg-mild"><span>91-94% Mild</span></div>
               <div class="meter-seg seg-optimal"><span>95-100% Optimal</span></div>
             </div>
-            <div class="meter-needle" id="spo2Needle" style="left: 92%;">â–¼</div>
+            <div class="meter-needle" id="spo2Needle" style="left: 92%;">▼</div>
           </div>
           <div class="widget-desc" id="spo2Desc">Measures arterial blood oxygen saturation ($HbO_2$). Normal healthy resting range is 95% to 100%.</div>
         </div>
 
         <div class="widget-card">
           <div class="widget-header">
-            <div class="widget-title">Cardio Fitness &amp; HR Training Zones (VOâ‚‚ Max)</div>
-            <div class="widget-badge" id="vo2Badge">VOâ‚‚ Max: -- mL/kg/min</div>
+            <div class="widget-title">Cardio Fitness &amp; HR Training Zones (VO₂ Max)</div>
+            <div class="widget-badge" id="vo2Badge">VO₂ Max: -- mL/kg/min</div>
           </div>
           <div class="zones-container">
             <div class="zone-box zone-1" id="zoneBox1">
@@ -222,8 +222,8 @@
         <div class="chart-header">
           <div class="chart-title">60-Second Physiological Trend Line (Autonomic Recovery &amp; Saturation History)</div>
           <div class="legend">
-            <div class="legend-item"><span class="legend-color" style="background: #f85149;"></span> Heart Rate (40â€“160 BPM)</div>
-            <div class="legend-item"><span class="legend-color" style="background: #3fb950;"></span> SpOâ‚‚ (80â€“100%)</div>
+            <div class="legend-item"><span class="legend-color" style="background: #f85149;"></span> Heart Rate (40–160 BPM)</div>
+            <div class="legend-item"><span class="legend-color" style="background: #3fb950;"></span> SpO₂ (80–100%)</div>
             <div style="color: var(--text-dim);">1 Hz Rolling Window | 60-Sec History</div>
           </div>
         </div>
@@ -238,7 +238,7 @@
     <section class="tab-pane" id="tab-respiration">
       <div class="chart-container">
         <div class="chart-header">
-          <div class="chart-title">Respiration Waveform (Respiratory Sinus Arrhythmia - 0.15â€“0.35 Hz)</div>
+          <div class="chart-title">Respiration Waveform (Respiratory Sinus Arrhythmia - 0.15–0.35 Hz)</div>
           <div class="legend">
             <div class="legend-item"><span class="legend-color" style="background: #2ea043;"></span> Inhale Crest (+) / Exhale Trough (-)</div>
             <div style="color: var(--text-dim);">14-Sample Tuned Low-Pass Filter</div>
@@ -256,9 +256,9 @@
           <div class="widget-badge" style="background: rgba(46, 160, 67, 0.2); color: #3fb950; border-color: #2ea043;">Tuned for 5 to 54 BrPM</div>
         </div>
         <div style="font-size: 13px; color: var(--text); line-height: 1.6;">
-          <p><strong>â€¢ Rapid Breathing / Hyperventilation:</strong> Breathe rapidly (panting). Notice the green sine wave tighten into fast oscillations (up to ~54 BrPM / 1.1s cycle) without being drowned out by the 1.2 Hz heartbeat pulse.</p>
-          <p style="margin-top: 6px;"><strong>â€¢ Slow Meditative / Pranayama Breathing:</strong> Take deep, slow breaths. Notice the wave smoothly stretch wide across the screen (down to ~5 BrPM / 12s cycle).</p>
-          <p style="margin-top: 6px;"><strong>â€¢ Breath-Holding / Apnea:</strong> Hold your breath for &gt;5.5 seconds. Notice the wave settle completely flat along the center dashed zero-baseline with status <code>Holding breath / Steady</code>.</p>
+          <p><strong>• Rapid Breathing / Hyperventilation:</strong> Breathe rapidly (panting). Notice the green sine wave tighten into fast oscillations (up to ~54 BrPM / 1.1s cycle) without being drowned out by the 1.2 Hz heartbeat pulse.</p>
+          <p style="margin-top: 6px;"><strong>• Slow Meditative / Pranayama Breathing:</strong> Take deep, slow breaths. Notice the wave smoothly stretch wide across the screen (down to ~5 BrPM / 12s cycle).</p>
+          <p style="margin-top: 6px;"><strong>• Breath-Holding / Apnea:</strong> Hold your breath for &gt;5.5 seconds. Notice the wave settle completely flat along the center dashed zero-baseline with status <code>Holding breath / Steady</code>.</p>
         </div>
       </div>
     </section>
@@ -299,15 +299,15 @@
       <div class="analysis-panel">
         <div class="widget-card">
           <div class="widget-header">
-            <div class="widget-title">Thermal Comparison &amp; Peripheral Gradient (Î”T)</div>
+            <div class="widget-title">Thermal Comparison &amp; Peripheral Gradient (ΔT)</div>
             <div class="widget-badge">Vasomotor Tone</div>
           </div>
           <div style="margin: 14px 0; font-size: 14px; line-height: 1.6;">
-            <p><strong>Skin / Die Temperature:</strong> <span id="envSkinVal" style="color: #e3b341; font-weight: 700;">-- Â°C</span> (MAX30102 Die)</p>
-            <p style="margin-top: 6px;"><strong>Ambient Air Temperature:</strong> <span id="envAirVal" style="font-weight: 700;">-- Â°C</span> (BME280)</p>
-            <p style="margin-top: 8px; font-size: 15px;"><strong>Thermal Gradient (Î”T):</strong> <span id="envGradientVal" style="color: #3fb950; font-weight: 700;">-- Â°C</span></p>
+            <p><strong>Skin / Die Temperature:</strong> <span id="envSkinVal" style="color: #e3b341; font-weight: 700;">-- °C</span> (MAX30102 Die)</p>
+            <p style="margin-top: 6px;"><strong>Ambient Air Temperature:</strong> <span id="envAirVal" style="font-weight: 700;">-- °C</span> (BME280)</p>
+            <p style="margin-top: 8px; font-size: 15px;"><strong>Thermal Gradient (ΔT):</strong> <span id="envGradientVal" style="color: #3fb950; font-weight: 700;">-- °C</span></p>
           </div>
-          <div class="widget-desc">A positive gradient (Skin &gt; Air by 3â€“8Â°C) confirms healthy peripheral circulation. A low or negative gradient indicates peripheral vasoconstriction or cold extremities.</div>
+          <div class="widget-desc">A positive gradient (Skin &gt; Air by 3–8°C) confirms healthy peripheral circulation. A low or negative gradient indicates peripheral vasoconstriction or cold extremities.</div>
         </div>
 
         <div class="widget-card">
@@ -329,11 +329,11 @@
       <div class="chart-header">
         <div class="chart-title" style="font-size: 13px;">Raw 25 Hz USB Serial Telemetry Stream</div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <button class="btn btn-secondary" onclick="copyAllLogs()">ðŸ“‹ Copy All Logs</button>
-          <button class="btn btn-secondary" onclick="copyLast100Logs()">ðŸ“‹ Copy Last 100 Lines</button>
-          <button class="btn btn-secondary" onclick="clearLogs()">ðŸ—‘ Clear</button>
-          <button class="btn btn-secondary" onclick="exportCSV()">ðŸ“¥ Export CSV</button>
-          <span class="toast" id="copyToast">âœ” Copied!</span>
+          <button class="btn btn-secondary" onclick="copyAllLogs()">📋 Copy All Logs</button>
+          <button class="btn btn-secondary" onclick="copyLast100Logs()">📋 Copy Last 100 Lines</button>
+          <button class="btn btn-secondary" onclick="clearLogs()">🗑 Clear</button>
+          <button class="btn btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
+          <span class="toast" id="copyToast">✔ Copied!</span>
         </div>
       </div>
       <div class="log-box" id="logBox">Waiting for connection... Close PuTTY or serial monitors, then click "Connect STM32" above.</div>
@@ -345,7 +345,7 @@
   <script src="js/audio.js?v=2.2"></script>
   <script src="js/export.js?v=2.2"></script>
   <script src="js/charts.js?v=2.2"></script>
-  <script src="js/dsp.js?v=2.2"></script>
+  <script src="js/dsp.js?v=2.3"></script>
   <script src="js/app.js?v=2.2"></script>
 </body>
 </html>

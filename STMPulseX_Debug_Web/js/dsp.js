@@ -114,8 +114,13 @@ function processTelemetry(ir, red, isFinger, ctemp) {
     if (spo2Badge) {
       spo2Badge.textContent = 'Awaiting Finger';
       spo2Badge.style.color = 'var(--accent)';
+      spo2Badge.style.borderColor = 'rgba(88, 166, 255, 0.3)';
     }
     if (spo2Needle) spo2Needle.style.left = '50%';
+    const spo2Desc = document.getElementById('spo2Desc');
+    if (spo2Desc) spo2Desc.textContent = 'Measures arterial blood oxygen saturation (HbO₂). Normal healthy resting range is 95% to 100%.';
+    const zoneDesc = document.getElementById('zoneDesc');
+    if (zoneDesc) zoneDesc.textContent = 'Cardiovascular exertion tracking. Zones dynamically highlight according to real-time BPM.';
     if (vo2Badge) vo2Badge.textContent = 'VO₂ Max: -- mL/kg/min';
     zoneBoxes.forEach(b => { if (b) b.classList.remove('active'); });
 
@@ -342,6 +347,7 @@ function processTelemetry(ir, red, isFinger, ctemp) {
 }
 
 function updateSpO2Gauge(spo2) {
+  if (!spo2 || spo2 <= 0) return;
   const spo2Needle = document.getElementById('spo2Needle');
   const valSpO2 = document.getElementById('valSpO2');
   const subSpO2 = document.getElementById('subSpO2');

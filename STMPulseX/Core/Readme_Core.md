@@ -1,6 +1,7 @@
 # 🧠 Core Application & Driver Architecture (`Core/`)
 
 [![Component](https://img.shields.io/badge/Module-STM32WB55%20Core-blue.svg)]()
+[![Version](https://img.shields.io/badge/Version-v0.1.1--Pre--BLE-blue.svg)]()
 [![Language](https://img.shields.io/badge/Language-C99-brightgreen.svg)]()
 [![Interface](https://img.shields.io/badge/I2C-100%20kHz%20Standard-orange.svg)]()
 

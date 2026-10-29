@@ -1,6 +1,7 @@
 # 🫀 STMPulseX — Biosignal & Environmental Telemetry Suite
 
 [![MCU](https://img.shields.io/badge/MCU-STM32WB55CGUx-03234b.svg?logo=stmicroelectronics)](https://www.st.com/en/microcontrollers-microprocessors/stm32wb55cg.html)
+[![Version](https://img.shields.io/badge/Version-v0.1.1--Pre--BLE-blue.svg)]()
 [![Core](https://img.shields.io/badge/Architecture-ARM%20Cortex--M4%20%2B%20Cortex--M0%2B-blue.svg)](https://developer.arm.com/)
 [![Sensors](https://img.shields.io/badge/Sensors-MAX30102%20%7C%20BME280-green.svg)](https://www.analog.com/en/products/max30102.html)
 [![Interface](https://img.shields.io/badge/Interface-USB%20CDC%20Virtual%20COM%20%40%2025Hz-orange.svg)]()
@@ -8,6 +9,15 @@
 [![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
 
 An open-source, medical-grade telemetry platform powered by the **STM32WB55 Wireless SoC**. **STMPulseX** continuously samples dual-wavelength photoplethysmogram (PPG) optical signals and barometric environmental data, performing onboard conditioning and streaming real-time biosignals over Full-Speed USB CDC to a zero-install Web Serial graphical suite.
+
+---
+
+## 🏷️ Version History & Releases
+
+| Version | Tag | Status | Key Highlights |
+| :--- | :--- | :--- | :--- |
+| **`v0.1.1`** | **`v0.1.1`** | **Current** | **Pre-BLE Working Copy**: 25 Hz USB CDC telemetry active, MAX30102 PPG & BME280 sensor processing fully validated, Web Serial Biosignal Suite overhauled with balanced 9-metric grid and center-aligned controls. Prepared for ST-Link CPU2 wireless stack flash. |
+| **`v0.1.0`** | `v0.1.0` | Initial | Initial firmware scaffolding, hardware drivers, and raw telemetry parser. |
 
 ---
 

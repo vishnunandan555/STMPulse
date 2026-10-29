@@ -1,6 +1,7 @@
 # 🔌 USB CDC Virtual COM Port Architecture (`USB_Device/`)
 
 [![USB Specification](https://img.shields.io/badge/USB-2.0%20Full--Speed%20(12%20Mbps)-blue.svg)](https://www.usb.org/)
+[![Version](https://img.shields.io/badge/Version-v0.1.1--Pre--BLE-blue.svg)]()
 [![Class](https://img.shields.io/badge/Class-CDC%20Virtual%20COM%20Port-orange.svg)]()
 [![Driver](https://img.shields.io/badge/Driver-CDC%20ACM%20Standard-brightgreen.svg)]()
 

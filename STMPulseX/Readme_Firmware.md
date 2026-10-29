@@ -1,6 +1,7 @@
 # ⚙️ STMPulseX Firmware Engineering Guide
 
 [![Target MCU](https://img.shields.io/badge/Target-STM32WB55CGUx-03234b.svg?logo=stmicroelectronics)](https://www.st.com/en/microcontrollers-microprocessors/stm32wb55cg.html)
+[![Release](https://img.shields.io/badge/Release-v0.1.1--Pre--BLE-blue.svg)]()
 [![IDE](https://img.shields.io/badge/IDE-STM32CubeIDE-blue.svg)](https://www.st.com/en/development-tools/stm32cubeide.html)
 [![Toolchain](https://img.shields.io/badge/Toolchain-GNU%20Arm%20Embedded-brightgreen.svg)](https://developer.arm.com/downloads/-/gnu-arm-embedded-toolchain-downloads)
 [![HAL](https://img.shields.io/badge/HAL-STM32Cube%20WB%20v1.17+-orange.svg)]()

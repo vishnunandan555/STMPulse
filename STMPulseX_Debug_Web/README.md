@@ -1,6 +1,7 @@
 # 🛠️ STMPulseX_Debug_Web — Developer Biosignal Testbed & Web Telemetry Suite
 
 [![Web Serial API](https://img.shields.io/badge/API-Web%20Serial-informational.svg)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API)
+[![Version](https://img.shields.io/badge/Version-v0.1.1--Pre--BLE-blue.svg)]()
 [![UI Technology](https://img.shields.io/badge/Frontend-Vanilla%20HTML5%20%7C%20Canvas%202D-green.svg)]()
 [![Platform](https://img.shields.io/badge/Platform-Chrome%20%7C%20Edge%20%7C%20Opera-blue.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](../LICENSE)

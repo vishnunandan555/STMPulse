@@ -1,4 +1,4 @@
-// Application State, WebSerial Communication & UI Navigation Controller
+﻿// Application State, WebSerial Communication & UI Navigation Controller
 let port = null;
 let reader = null;
 let keepReading = false;
@@ -68,13 +68,13 @@ function togglePause() {
   const overlays = document.querySelectorAll('.pause-overlay');
   if (isPaused) {
     if (pauseBtn) {
-      pauseBtn.textContent = 'â–¶ Resume';
+      pauseBtn.textContent = '▶ Resume';
       pauseBtn.classList.add('paused');
     }
     overlays.forEach(o => o.style.display = 'block');
   } else {
     if (pauseBtn) {
-      pauseBtn.textContent = 'â¸ Pause';
+      pauseBtn.textContent = '⏸ Pause';
       pauseBtn.classList.remove('paused');
     }
     overlays.forEach(o => o.style.display = 'none');
@@ -104,7 +104,7 @@ function resetSessionStats() {
   if (statAvgSpO2) statAvgSpO2.textContent = '--%';
   if (statBreaths) statBreaths.textContent = '0';
   if (statPackets) statPackets.textContent = '0 pkts';
-  showToast('ðŸ”„ Session statistics reset');
+  showToast('🔄 Session statistics reset');
 }
 
 function updateSessionStatsUI() {
@@ -164,7 +164,7 @@ function parseDataLine(line) {
     const envAirVal = document.getElementById('envAirVal');
     const envHumVal = document.getElementById('envHumVal');
     const envPressVal = document.getElementById('envPressVal');
-    if (envAirVal) envAirVal.textContent = `${envMatch[1]} Â°C`;
+    if (envAirVal) envAirVal.textContent = `${envMatch[1]} °C`;
     if (envHumVal) envHumVal.textContent = `${envMatch[2]} %`;
     if (envPressVal) envPressVal.textContent = `${envMatch[3]} hPa`;
   }
@@ -189,17 +189,17 @@ function parseDataLine(line) {
     if (ctemp !== null && valSkinTemp) {
       valSkinTemp.textContent = ctemp.toFixed(2);
       const envSkinVal = document.getElementById('envSkinVal');
-      if (envSkinVal) envSkinVal.textContent = `${ctemp.toFixed(2)} Â°C`;
+      if (envSkinVal) envSkinVal.textContent = `${ctemp.toFixed(2)} °C`;
 
       if (currentEnvTemp !== null) {
         const diff = ctemp - currentEnvTemp;
         const sign = diff >= 0 ? '+' : '';
         if (subSkinTemp) {
-          subSkinTemp.innerHTML = `Gradient: <span style="color: ${diff >= 0 ? '#3fb950' : '#f0883e'}; font-weight: 700;">${sign}${diff.toFixed(1)} Â°C</span>`;
+          subSkinTemp.innerHTML = `Gradient: <span style="color: ${diff >= 0 ? '#3fb950' : '#f0883e'}; font-weight: 700;">${sign}${diff.toFixed(1)} °C</span>`;
         }
         const envGradientVal = document.getElementById('envGradientVal');
         if (envGradientVal) {
-          envGradientVal.textContent = `${sign}${diff.toFixed(1)} Â°C`;
+          envGradientVal.textContent = `${sign}${diff.toFixed(1)} °C`;
           envGradientVal.style.color = diff >= 0 ? '#3fb950' : '#f0883e';
         }
       }

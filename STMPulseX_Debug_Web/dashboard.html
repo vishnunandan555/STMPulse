@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STMPulseX — Developer Biosignal Suite & Diagnostic Testbed</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+  <!-- Top Header & Global Controls Toolbar -->
+  <header>
+    <div class="brand-wrap">
+      <h1>🫀 STMPulseX Biosignal Suite</h1>
+      <p>Developer Telemetry Testbed &amp; Signal Validation Engine (25 Hz)</p>
+    </div>
+
+    <div class="toolbar">
+      <div style="display: flex; gap: 4px; align-items: center; background: #161b22; padding: 3px; border-radius: 6px; border: 1px solid var(--border);">
+        <span style="font-size: 11px; color: var(--text-dim); margin: 0 6px;">SPEED:</span>
+        <button class="btn btn-secondary" id="speedSlowBtn" onclick="setSpeed(0.5)">0.5x</button>
+        <button class="btn btn-secondary active" id="speedNormalBtn" onclick="setSpeed(1.0)">1.0x</button>
+        <button class="btn btn-secondary" id="speedFastBtn" onclick="setSpeed(2.0)">2.0x</button>
+        <button class="btn btn-secondary" id="speedMaxBtn" onclick="setSpeed('max')" title="Real-time Max Speed (~1 sec sweep)">⚡ MAX</button>
+      </div>
+
+      <button class="btn btn-pause" id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
+      <button class="btn btn-secondary" id="audioBtn" onclick="toggleAudio()" title="Toggle clinical pulse audio beep">🔇 Beep: Off</button>
+      <button class="btn btn-secondary" id="csvBtn" onclick="exportCSV()" title="Download session telemetry data as CSV">📥 Export CSV</button>
+
+      <div class="status-badge">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Disconnected</span>
+      </div>
+      <button class="btn" id="connectBtn">Connect STM32</button>
+    </div>
+  </header>
+
+  <!-- Live Session Statistics Banner -->
+  <div class="session-stats-bar">
+    <div class="stat-item"><span class="stat-label">⏱ SESSION:</span> <span class="stat-val" id="statElapsed">00:00</span></div>
+    <div class="stat-item"><span class="stat-label">❤️ HR RANGE:</span> <span class="stat-val" id="statHRRange">-- (Avg --)</span></div>
+    <div class="stat-item"><span class="stat-label">💓 PULSES:</span> <span class="stat-val" id="statBeats">0</span></div>
+    <div class="stat-item"><span class="stat-label">🩸 AVG SpO₂:</span> <span class="stat-val" id="statAvgSpO2">--%</span></div>
+    <div class="stat-item"><span class="stat-label">🫁 BREATHS:</span> <span class="stat-val" id="statBreaths">0</span></div>
+    <div class="stat-item"><span class="stat-label">⚡ TELEMETRY:</span> <span class="stat-val" id="statPackets">0 pkts</span></div>
+    <button class="btn-stat-reset" onclick="resetSessionStats()" title="Reset session counters">🔄 Reset Stats</button>
+  </div>
+
+  <!-- Primary Navigation Tabs -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="tab-overview">🌐 Central Overview</button>
+    <button class="tab-btn" data-tab="tab-cardio">🫀 Cardio &amp; Autonomic Lab</button>
+    <button class="tab-btn" data-tab="tab-respiration">🫁 Pulmonary &amp; Respiration</button>
+    <button class="tab-btn" data-tab="tab-optics">🔬 Raw Optics &amp; PI</button>
+    <button class="tab-btn" data-tab="tab-environment">🌡️ Environmental &amp; Thermals</button>
+    <button class="tab-btn" data-tab="tab-telemetry">⚡ Telemetry &amp; Logs</button>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="tab-content">
+
+    <!-- ==================== TAB 1: CENTRAL OVERVIEW ==================== -->
+    <section class="tab-pane active" id="tab-overview">
+      <!-- 9 Metric Summary Grid -->
+      <div class="grid">
+        <div class="card">
+          <div class="label">Finger State</div>
+          <div class="value" id="valFinger"><span class="finger-indicator finger-no">NO FINGER</span></div>
+          <div class="subtext" id="subFinger">Optical contact</div>
+        </div>
+        <div class="card">
+          <div class="label">Heart Rate</div>
+          <div class="value" style="color: #f85149;"><span id="valBPM">--</span> <span class="unit">BPM</span></div>
+          <div class="subtext" id="subBPM">Peak intervals</div>
+        </div>
+        <div class="card">
+          <div class="label">SpO₂ (Oxygen)</div>
+          <div class="value" style="color: #3fb950;"><span id="valSpO2">--</span> <span class="unit">%</span></div>
+          <div class="subtext" id="subSpO2">Normal: 95-100%</div>
+        </div>
+        <div class="card">
+          <div class="label">Sensor Accuracy (PI)</div>
+          <div class="value" style="color: var(--cyan);"><span id="valPI">--</span> <span class="unit">%</span></div>
+          <div class="subtext" id="subPI">Accuracy: --</div>
+        </div>
+        <div class="card">
+          <div class="label">Mood / Stress (HRV)</div>
+          <div class="value" style="color: var(--purple);"><span id="valHRV">--</span> <span class="unit">ms</span></div>
+          <div class="subtext" id="subHRV">Mood: --</div>
+        </div>
+        <div class="card">
+          <div class="label">Respiration Rate</div>
+          <div class="value" style="color: var(--orange);"><span id="valResp">--</span> <span class="unit">BrPM</span></div>
+          <div class="subtext" id="subResp">Ready to detect</div>
+          <div style="margin-top: 8px; height: 4px; background: #21262d; border-radius: 2px; overflow: hidden;">
+            <div id="breathBar" style="height: 100%; width: 50%; background: var(--orange); transition: width 0.12s linear;"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="label">Skin / Sensor Temp</div>
+          <div class="value" style="color: #e3b341;"><span id="valSkinTemp">--</span> <span class="unit">°C</span></div>
+          <div class="subtext" id="subSkinTemp">Requires flash</div>
+        </div>
+        <div class="card">
+          <div class="label">Ambient Temp</div>
+          <div class="value"><span id="valTemp">--</span> <span class="unit">°C</span></div>
+          <div class="subtext">BME280 Air</div>
+        </div>
+        <div class="card">
+          <div class="label">Pressure</div>
+          <div class="value"><span id="valPress">--</span> <span class="unit">hPa</span></div>
+          <div class="subtext" id="subHum">Hum: -- %</div>
+        </div>
+      </div>
+
+      <!-- Real-Time Waveform 1: PPG Pulse -->
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">Heart Rate Pulse Waveform (Photoplethysmogram AC Bumps)</div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: #f85149;"></span> Blood Surge Pulse</div>
+            <div style="color: var(--text-dim);">Autoscaled | DC Baseline Filtered</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="ppgCanvas" width="900" height="180"></canvas>
+          <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
+
+      <!-- Real-Time Waveform 2: Respiration Waveform -->
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">Respiration Waveform (Respiratory Sinus Arrhythmia - Breath Wave)</div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: #2ea043;"></span> Thoracic Breath Wave</div>
+            <div style="color: var(--text-dim);">0.15–0.35 Hz Low-Pass Filtered | Live Inhale &amp; Exhale</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="respCanvas" width="900" height="170"></canvas>
+          <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
+
+      <!-- Advanced Widgets: SpO2 Gauge & VO2 Max Zones -->
+      <div class="analysis-panel">
+        <div class="widget-card">
+          <div class="widget-header">
+            <div class="widget-title">SpO₂ Clinical Saturation Range</div>
+            <div class="widget-badge" id="spo2Badge">Awaiting Finger</div>
+          </div>
+          <div class="meter-bar-container">
+            <div class="meter-bar">
+              <div class="meter-seg seg-severe"><span>&lt;86% Severe</span></div>
+              <div class="meter-seg seg-mod"><span>86-90% Mod</span></div>
+              <div class="meter-seg seg-mild"><span>91-94% Mild</span></div>
+              <div class="meter-seg seg-optimal"><span>95-100% Optimal</span></div>
+            </div>
+            <div class="meter-needle" id="spo2Needle" style="left: 92%;">▼</div>
+          </div>
+          <div class="widget-desc" id="spo2Desc">Measures arterial blood oxygen saturation ($HbO_2$). Normal healthy resting range is 95% to 100%.</div>
+        </div>
+
+        <div class="widget-card">
+          <div class="widget-header">
+            <div class="widget-title">Cardio Fitness &amp; HR Training Zones (VO₂ Max)</div>
+            <div class="widget-badge" id="vo2Badge">VO₂ Max: -- mL/kg/min</div>
+          </div>
+          <div class="zones-container">
+            <div class="zone-box zone-1" id="zoneBox1">
+              <div class="zone-name">Z1 Recovery</div>
+              <div class="zone-range">&lt;114 BPM</div>
+            </div>
+            <div class="zone-box zone-2" id="zoneBox2">
+              <div class="zone-name">Z2 Aerobic</div>
+              <div class="zone-range">114-133</div>
+            </div>
+            <div class="zone-box zone-3" id="zoneBox3">
+              <div class="zone-name">Z3 Tempo</div>
+              <div class="zone-range">133-152</div>
+            </div>
+            <div class="zone-box zone-4" id="zoneBox4">
+              <div class="zone-name">Z4 Threshold</div>
+              <div class="zone-range">152-171</div>
+            </div>
+            <div class="zone-box zone-5" id="zoneBox5">
+              <div class="zone-name">Z5 Peak</div>
+              <div class="zone-range">171+ BPM</div>
+            </div>
+          </div>
+          <div class="widget-desc" id="zoneDesc">Cardiovascular exertion tracking. Zones dynamically highlight according to real-time BPM.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: CARDIO LAB ==================== -->
+    <section class="tab-pane" id="tab-cardio">
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">Photoplethysmogram (High-Resolution AC Blood Surge Pulse)</div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: #f85149;"></span> Systolic Peaks &amp; Dicrotic Notch</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="cardioPPGCanvas" width="900" height="190"></canvas>
+          <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">60-Second Physiological Trend Line (Autonomic Recovery &amp; Saturation History)</div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: #f85149;"></span> Heart Rate (40–160 BPM)</div>
+            <div class="legend-item"><span class="legend-color" style="background: #3fb950;"></span> SpO₂ (80–100%)</div>
+            <div style="color: var(--text-dim);">1 Hz Rolling Window | 60-Sec History</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="trendCanvas" width="900" height="170"></canvas>
+          <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: RESPIRATION LAB ==================== -->
+    <section class="tab-pane" id="tab-respiration">
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">Respiration Waveform (Respiratory Sinus Arrhythmia - 0.15–0.35 Hz)</div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: #2ea043;"></span> Inhale Crest (+) / Exhale Trough (-)</div>
+            <div style="color: var(--text-dim);">14-Sample Tuned Low-Pass Filter</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="respLabCanvas" width="900" height="200"></canvas>
+          <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
+
+      <div class="widget-card" style="margin-bottom: 18px;">
+        <div class="widget-header">
+          <div class="widget-title">Respiratory Dynamics &amp; Testing Guide</div>
+          <div class="widget-badge" style="background: rgba(46, 160, 67, 0.2); color: #3fb950; border-color: #2ea043;">Tuned for 5 to 54 BrPM</div>
+        </div>
+        <div style="font-size: 13px; color: var(--text); line-height: 1.6;">
+          <p><strong>• Rapid Breathing / Hyperventilation:</strong> Breathe rapidly (panting). Notice the green sine wave tighten into fast oscillations (up to ~54 BrPM / 1.1s cycle) without being drowned out by the 1.2 Hz heartbeat pulse.</p>
+          <p style="margin-top: 6px;"><strong>• Slow Meditative / Pranayama Breathing:</strong> Take deep, slow breaths. Notice the wave smoothly stretch wide across the screen (down to ~5 BrPM / 12s cycle).</p>
+          <p style="margin-top: 6px;"><strong>• Breath-Holding / Apnea:</strong> Hold your breath for &gt;5.5 seconds. Notice the wave settle completely flat along the center dashed zero-baseline with status <code>Holding breath / Steady</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: RAW OPTICS & PI ==================== -->
+    <section class="tab-pane" id="tab-optics">
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">Raw Infrared Channel (880 nm Photodiode ADC Counts)</div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: var(--cyan);"></span> IR Channel (Cyan)</div>
+            <div style="color: var(--text-dim);">Dynamic Autoscaled (Min/Max Centered)</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="rawIRCanvas" width="900" height="180"></canvas>
+          <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">Raw Red Channel (660 nm LED Photodiode ADC Counts)</div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: #fb923c;"></span> Red Channel (Orange)</div>
+            <div style="color: var(--text-dim);">Dynamic Autoscaled (Min/Max Centered)</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="rawRedCanvas" width="900" height="180"></canvas>
+          <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: ENVIRONMENTAL & THERMALS ==================== -->
+    <section class="tab-pane" id="tab-environment">
+      <div class="analysis-panel">
+        <div class="widget-card">
+          <div class="widget-header">
+            <div class="widget-title">Thermal Comparison &amp; Peripheral Gradient (ΔT)</div>
+            <div class="widget-badge">Vasomotor Tone</div>
+          </div>
+          <div style="margin: 14px 0; font-size: 14px; line-height: 1.6;">
+            <p><strong>Skin / Die Temperature:</strong> <span id="envSkinVal" style="color: #e3b341; font-weight: 700;">-- °C</span> (MAX30102 Die)</p>
+            <p style="margin-top: 6px;"><strong>Ambient Air Temperature:</strong> <span id="envAirVal" style="font-weight: 700;">-- °C</span> (BME280)</p>
+            <p style="margin-top: 8px; font-size: 15px;"><strong>Thermal Gradient (ΔT):</strong> <span id="envGradientVal" style="color: #3fb950; font-weight: 700;">-- °C</span></p>
+          </div>
+          <div class="widget-desc">A positive gradient (Skin &gt; Air by 3–8°C) confirms healthy peripheral circulation. A low or negative gradient indicates peripheral vasoconstriction or cold extremities.</div>
+        </div>
+
+        <div class="widget-card">
+          <div class="widget-header">
+            <div class="widget-title">Atmospheric &amp; Barometric Conditions</div>
+            <div class="widget-badge">Bosch BME280</div>
+          </div>
+          <div style="margin: 14px 0; font-size: 14px; line-height: 1.6;">
+            <p><strong>Barometric Pressure:</strong> <span id="envPressVal" style="font-weight: 700;">-- hPa</span></p>
+            <p style="margin-top: 6px;"><strong>Relative Humidity:</strong> <span id="envHumVal" style="font-weight: 700;">-- %</span></p>
+          </div>
+          <div class="widget-desc">64-bit precision temperature, humidity, and barometric atmospheric pressure compensation.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 6: TELEMETRY & LOGS ==================== -->
+    <section class="tab-pane" id="tab-telemetry">
+      <div class="chart-header">
+        <div class="chart-title" style="font-size: 13px;">Raw 25 Hz USB Serial Telemetry Stream</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn btn-secondary" onclick="copyAllLogs()">📋 Copy All Logs</button>
+          <button class="btn btn-secondary" onclick="copyLast100Logs()">📋 Copy Last 100 Lines</button>
+          <button class="btn btn-secondary" onclick="clearLogs()">🗑 Clear</button>
+          <button class="btn btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
+          <span class="toast" id="copyToast">✔ Copied!</span>
+        </div>
+      </div>
+      <div class="log-box" id="logBox">Waiting for connection... Close PuTTY or serial monitors, then click "Connect STM32" above.</div>
+    </section>
+
+  </main>
+
+  <!-- Modular Scripts -->
+  <script src="js/audio.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/dsp.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

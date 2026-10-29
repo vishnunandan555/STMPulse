@@ -105,5 +105,5 @@ Because STMPulseX implements standard USB CDC ACM (Abstract Control Model), no c
 | Issue | Root Cause | Solution |
 |:---|:---|:---|
 | Device not recognized (Code 43 or Unknown Device) | USB clock is not precisely 48 MHz | Verify that `SystemClock_Config()` sets `PLLQ = 2` from a 128 MHz VCO, giving 48 MHz. Also confirm `HAL_PWREx_EnableVddUSB()` is executed in `HAL_MspInit()`. |
-| Port appears in Device Manager but cannot be opened in browser | Port locked by an active serial console | Close any active PuTTY, Tera Term, or Arduino Serial Monitor windows before launching `dashboard.html`. |
+| Port appears in Device Manager but cannot be opened in browser | Port locked by an active serial console | Close any active PuTTY, Tera Term, or Arduino Serial Monitor windows before launching `STMPulseX_Debug_Web/dashboard.html`. |
 | Packet truncation or missing lines | Transmission size exceeds buffer | Ensure formatted telemetry strings remain below the `APP_TX_DATA_SIZE` buffer threshold. |

@@ -54,18 +54,41 @@ An open-source, medical-grade telemetry platform powered by the **STM32WB55 Wire
                                              │ Virtual COM Port (115200 baud)
                                              ▼
                         ┌─────────────────────────────────────────┐
-                        │      Client Browser (Web Serial API)    │
-                        │             dashboard.html              │
+                        │    Developer Web Testbed (Web Serial)   │
+                        │        STMPulseX_Debug_Web/             │
                         ├─────────────────────────────────────────┤
                         │ • Real-time AC PPG Pulse Waveform       │
-                        │ • Dual-wavelength Raw IR & Red Visuals  │
+                        │ • Live Respiration Waveform (RSA Sine)  │
+                        │ • Dynamic Autoscaled Raw IR & Red Chs   │
+                        │ • 60-Sec Rolling Physiological Trend    │
                         │ • Dynamic Peak Detection (Heart Rate)   │
-                        │ • Ratio-of-Ratios SpO2 Extraction       │
+                        │ • Ratio-of-Ratios SpO2 Saturation       │
                         │ • Autonomic Tone HRV (RMSSD in ms)      │
-                        │ • Respiratory Sinus Arrhythmia (BrPM)   │
-                        │ • Perfusion Index (PI %)                │
-                        │ • Environmental Monitoring Curves       │
+                        │ • Clinical Pulse Audio Tone Synthesizer │
+                        │ • Session Telemetry CSV Data Exporter   │
+                        │ • Live Session Stats & Thermal Gradient │
                         └─────────────────────────────────────────┘
+```
+
+---
+
+## 📁 Repository Directory Structure
+
+```text
+STM/
+├── STMPulseX/            # Bare-metal STM32WB55 firmware (Cortex-M4/M0+, HAL, USB CDC, I2C drivers)
+│   ├── Core/             # Application sources, entry point, 25 Hz scheduler, sensor drivers
+│   ├── Drivers/          # CMSIS standard and STM32WBxx HAL library drivers
+│   ├── USB_Device/       # USB CDC Virtual COM Port stack and descriptors
+│   └── Readme_Firmware.md# Firmware architecture and build guide
+├── STMPulseX_Debug_Web/  # Developer testing testbed & diagnostic web suite
+│   ├── index.html        # Main tabbed developer telemetry dashboard
+│   ├── dashboard.html    # Mirror entrypoint for direct file access
+│   ├── css/              # Modular styling (main.css, components.css)
+│   ├── js/               # Modular DSP, chart renderers, audio engine, and CSV exporter
+│   └── README.md         # In-depth technical documentation for the web testbed
+├── STMPulseX_App/        # Mobile & cross-platform BLE application architecture
+└── README.md             # Top-level system architecture and hardware specification
 ```
 
 ---
@@ -111,7 +134,7 @@ To keep the repository modular and accessible for specialized contributors, deta
 
 | Document | Scope & Purpose | Target Audience |
 |:---|:---|:---|
-| [**`README_Dashboard.md`**](README_Dashboard.md) | Web Serial interface, digital signal processing algorithms, SpO2 & HRV calculations, canvas rendering, and troubleshooting. | Frontend Developers, Data Scientists, Biomedical Engineers |
+| [**`STMPulseX_Debug_Web/README.md`**](STMPulseX_Debug_Web/README.md) | Developer testbed guide, Web Serial interface, DSP algorithms, canvas waveforms, CSV telemetry export, and pulse audio synthesis. | Frontend Developers, Data Scientists, Biomedical Engineers |
 | [**`STMPulseX/Readme_Firmware.md`**](STMPulseX/Readme_Firmware.md) | Firmware architecture, clock distribution, STM32CubeIDE build steps, linker configuration, and flashing instructions. | Embedded Firmware Engineers, Systems Programmers |
 | [**`STMPulseX/Core/Readme_Core.md`**](STMPulseX/Core/Readme_Core.md) | In-depth breakdown of `main.c`, I2C drivers for MAX30102 & BME280, calibration register structures, and cooperative scheduler phases. | Driver Developers, Low-Level Programmers |
 | [**`STMPulseX/USB_Device/Readme_USB.md`**](STMPulseX/USB_Device/Readme_USB.md) | USB Communication Device Class (CDC) implementation, endpoint descriptors, ring buffer synchronization, and host compatibility. | USB Stack Engineers, Communications Specialists |
@@ -133,16 +156,16 @@ To keep the repository modular and accessible for specialized contributors, deta
 ### 2. Launching the Biosignal Dashboard
 
 1. Connect the STM32 board to your computer via USB (using the onboard USB User connector, PA11/PA12).
-2. Open [dashboard.html](dashboard.html) in any Chromium-based browser (Google Chrome, Microsoft Edge, Brave, Opera).
+2. Open [`STMPulseX_Debug_Web/index.html`](STMPulseX_Debug_Web/index.html) or [`STMPulseX_Debug_Web/dashboard.html`](STMPulseX_Debug_Web/dashboard.html) in any Chromium-based browser (Google Chrome, Microsoft Edge, Brave, Opera).
 3. Ensure no serial terminals (e.g., PuTTY, Tera Term, Arduino Serial Monitor) are holding the COM port.
 4. Click **Connect STM32** at the top right of the dashboard and select the `STMicroelectronics Virtual COM Port`.
-5. Real-time PPG and environmental graphs will immediately start streaming!
+5. Real-time PPG, Respiration, and environmental graphs will immediately start streaming!
 
 ---
 
 ## 🧮 Digital Signal Processing (DSP) Pipeline
 
-The biosignal engine in `dashboard.html` executes a lightweight, real-time DSP pipeline on each incoming 25 Hz sample:
+The biosignal engine in `STMPulseX_Debug_Web` executes a lightweight, real-time DSP pipeline on each incoming 25 Hz sample:
 
 1. **Finger Detection Threshold**: Optical infrared thresholding ($IR > 15,000$) isolates ambient air noise from finger placement.
 2. **DC Baseline Removal (High-Pass Filter)**:

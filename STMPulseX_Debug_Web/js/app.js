@@ -1,9 +1,13 @@
-// Application State, WebSerial Communication & UI Navigation Controller
+﻿// Application State, WebSerial Communication & UI Navigation Controller
 let port = null;
 let reader = null;
 let keepReading = false;
 let isPaused = false;
 let visiblePoints = 100;
+
+// Autoscaling Time / Memory Window Depth Controller
+let currentWindowMode = 'high';
+let windowSamples = 300; // High = 300 samples (~12.0s), Med = 150 (~6.0s), Low = 60 (~2.4s)
 
 // Session counters
 let sessionStartTime = performance.now();
@@ -37,6 +41,26 @@ function setSpeed(factor) {
   else visiblePoints = 100;
 }
 
+// Time / Memory Window Depth Settings
+function setWindow(mode) {
+  currentWindowMode = mode;
+  const winLowBtn = document.getElementById('winLowBtn');
+  const winMedBtn = document.getElementById('winMedBtn');
+  const winHighBtn = document.getElementById('winHighBtn');
+
+  if (winLowBtn) winLowBtn.classList.toggle('active', mode === 'low');
+  if (winMedBtn) winMedBtn.classList.toggle('active', mode === 'med');
+  if (winHighBtn) winHighBtn.classList.toggle('active', mode === 'high');
+
+  if (mode === 'low') {
+    windowSamples = 60; // 2.4s: high localized amplitude sensitivity
+  } else if (mode === 'med') {
+    windowSamples = 150; // 6.0s: balanced clinical monitor view
+  } else {
+    windowSamples = 300; // 12.0s: wide baseline & full breath cycles
+  }
+}
+
 // Pause / Resume
 function togglePause() {
   isPaused = !isPaused;
@@ -44,13 +68,13 @@ function togglePause() {
   const overlays = document.querySelectorAll('.pause-overlay');
   if (isPaused) {
     if (pauseBtn) {
-      pauseBtn.textContent = '▶ Resume';
+      pauseBtn.textContent = 'â–¶ Resume';
       pauseBtn.classList.add('paused');
     }
     overlays.forEach(o => o.style.display = 'block');
   } else {
     if (pauseBtn) {
-      pauseBtn.textContent = '⏸ Pause';
+      pauseBtn.textContent = 'â¸ Pause';
       pauseBtn.classList.remove('paused');
     }
     overlays.forEach(o => o.style.display = 'none');
@@ -80,7 +104,7 @@ function resetSessionStats() {
   if (statAvgSpO2) statAvgSpO2.textContent = '--%';
   if (statBreaths) statBreaths.textContent = '0';
   if (statPackets) statPackets.textContent = '0 pkts';
-  showToast('🔄 Session statistics reset');
+  showToast('ðŸ”„ Session statistics reset');
 }
 
 function updateSessionStatsUI() {
@@ -140,7 +164,7 @@ function parseDataLine(line) {
     const envAirVal = document.getElementById('envAirVal');
     const envHumVal = document.getElementById('envHumVal');
     const envPressVal = document.getElementById('envPressVal');
-    if (envAirVal) envAirVal.textContent = `${envMatch[1]} °C`;
+    if (envAirVal) envAirVal.textContent = `${envMatch[1]} Â°C`;
     if (envHumVal) envHumVal.textContent = `${envMatch[2]} %`;
     if (envPressVal) envPressVal.textContent = `${envMatch[3]} hPa`;
   }
@@ -165,17 +189,17 @@ function parseDataLine(line) {
     if (ctemp !== null && valSkinTemp) {
       valSkinTemp.textContent = ctemp.toFixed(2);
       const envSkinVal = document.getElementById('envSkinVal');
-      if (envSkinVal) envSkinVal.textContent = `${ctemp.toFixed(2)} °C`;
+      if (envSkinVal) envSkinVal.textContent = `${ctemp.toFixed(2)} Â°C`;
 
       if (currentEnvTemp !== null) {
         const diff = ctemp - currentEnvTemp;
         const sign = diff >= 0 ? '+' : '';
         if (subSkinTemp) {
-          subSkinTemp.innerHTML = `Gradient: <span style="color: ${diff >= 0 ? '#3fb950' : '#f0883e'}; font-weight: 700;">${sign}${diff.toFixed(1)} °C</span>`;
+          subSkinTemp.innerHTML = `Gradient: <span style="color: ${diff >= 0 ? '#3fb950' : '#f0883e'}; font-weight: 700;">${sign}${diff.toFixed(1)} Â°C</span>`;
         }
         const envGradientVal = document.getElementById('envGradientVal');
         if (envGradientVal) {
-          envGradientVal.textContent = `${sign}${diff.toFixed(1)} °C`;
+          envGradientVal.textContent = `${sign}${diff.toFixed(1)} Â°C`;
           envGradientVal.style.color = diff >= 0 ? '#3fb950' : '#f0883e';
         }
       }
@@ -185,44 +209,44 @@ function parseDataLine(line) {
   }
 }
 
-// 60 FPS Render Loop (draws active canvases)
+// 60 FPS Render Loop (draws active canvases with HiDPI crispness)
 function render() {
   if (!isPaused) {
     // Overview canvases
     const ppgCanvas = document.getElementById('ppgCanvas');
     if (ppgCanvas && ppgCanvas.offsetParent !== null) {
-      drawPPGChart(ppgCanvas, ppgCanvas.getContext('2d'));
+      drawPPGChart(ppgCanvas);
     }
 
     const respCanvas = document.getElementById('respCanvas');
     if (respCanvas && respCanvas.offsetParent !== null) {
-      drawRespChart(respCanvas, respCanvas.getContext('2d'));
+      drawRespChart(respCanvas);
     }
 
     // Cardio Lab canvases
     const cardioPPG = document.getElementById('cardioPPGCanvas');
     if (cardioPPG && cardioPPG.offsetParent !== null) {
-      drawPPGChart(cardioPPG, cardioPPG.getContext('2d'));
+      drawPPGChart(cardioPPG);
     }
     const trendCanvas = document.getElementById('trendCanvas');
     if (trendCanvas && trendCanvas.offsetParent !== null) {
-      drawTrendChart(trendCanvas, trendCanvas.getContext('2d'));
+      drawTrendChart(trendCanvas);
     }
 
     // Respiration Lab canvas
     const respLabCanvas = document.getElementById('respLabCanvas');
     if (respLabCanvas && respLabCanvas.offsetParent !== null) {
-      drawRespChart(respLabCanvas, respLabCanvas.getContext('2d'));
+      drawRespChart(respLabCanvas);
     }
 
     // Optics Lab canvases
     const rawIRCanvas = document.getElementById('rawIRCanvas');
     if (rawIRCanvas && rawIRCanvas.offsetParent !== null) {
-      drawSingleRawChart(rawIRCanvas, rawIRCanvas.getContext('2d'), rawIRHistory, '#38bdf8', true);
+      drawSingleRawChart(rawIRCanvas, rawIRHistory, '#38bdf8', true);
     }
     const rawRedCanvas = document.getElementById('rawRedCanvas');
     if (rawRedCanvas && rawRedCanvas.offsetParent !== null) {
-      drawSingleRawChart(rawRedCanvas, rawRedCanvas.getContext('2d'), rawRedHistory, '#fb923c', false);
+      drawSingleRawChart(rawRedCanvas, rawRedHistory, '#fb923c', false);
     }
   }
   requestAnimationFrame(render);

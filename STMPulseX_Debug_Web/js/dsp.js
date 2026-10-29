@@ -14,10 +14,12 @@ let lastPeakTime = 0;
 const peakIntervals = []; // Inter-Beat Intervals (ms)
 let rollingSpO2 = null;
 
-// Respiration state (Fast Boxcar Filter + Hysteresis)
+// Respiration DSP Engine (Dual-Stage Moving Average Filter + Dynamic Normalization)
+const RESP_FILTER_LEN = 25; // Stage 1: Boxcar filter (1.0s at 25 Hz) to completely suppress cardiac ripples
+const RESP_BASE_LEN = 100;   // Stage 2: Sliding baseline window (4.0s at 25 Hz) for non-lagging DC tracking
 const respFilterWindow = [];
-const RESP_FILTER_LEN = 14; // ~0.56s at 25 Hz
-let respBaseline = 0;
+const respBaseWindow = [];
+const respACWindow = [];
 let lastBreathTime = 0;
 const breathIntervals = [];
 let breathPhase = 0; // -1: Exhale, 1: Inhale
@@ -101,6 +103,13 @@ function processTelemetry(ir, red, isFinger, ctemp) {
     if (breathBar) breathBar.style.width = '50%';
     rollingSpO2 = null;
     dcTracker = ir;
+
+    // Reset respiration DSP memory
+    respFilterWindow.length = 0;
+    respBaseWindow.length = 0;
+    respACWindow.length = 0;
+    breathPhase = 0;
+    lastBreathTime = 0;
 
     if (spo2Badge) {
       spo2Badge.textContent = 'Awaiting Finger';
@@ -252,31 +261,46 @@ function processTelemetry(ir, red, isFinger, ctemp) {
     updateSpO2Gauge(roundedSpO2);
   }
 
-  // 4. Robust Respiration Rate Detection (Fast Boxcar Filter + Hysteresis)
+  // 4. Overhauled Respiration Rate Detection (Dual-Stage Filter + Adaptive Normalization)
   respFilterWindow.push(ir);
   if (respFilterWindow.length > RESP_FILTER_LEN) respFilterWindow.shift();
 
   if (respFilterWindow.length >= RESP_FILTER_LEN) {
-    const respFiltered = respFilterWindow.reduce((a, b) => a + b, 0) / respFilterWindow.length;
-    if (respBaseline === 0) {
-      respBaseline = respFiltered;
-    } else {
-      respBaseline = (0.985 * respBaseline) + (0.015 * respFiltered);
-    }
+    // Stage 1: Fast Boxcar Filter (~1.0s) attenuates cardiac pulse ripples
+    const respSmooth = respFilterWindow.reduce((a, b) => a + b, 0) / respFilterWindow.length;
 
-    const respAC = respFiltered - respBaseline;
+    // Stage 2: Sliding Baseline Window (~4.0s) tracks true thoracic undulations without EMA lag
+    respBaseWindow.push(respSmooth);
+    if (respBaseWindow.length > RESP_BASE_LEN) respBaseWindow.shift();
+
+    const respBase = respBaseWindow.reduce((a, b) => a + b, 0) / respBaseWindow.length;
+    const respAC = respSmooth - respBase;
+
     respWaveform.shift();
     respWaveform.push(respAC);
 
-    // Animate live breathing expansion bar
+    // Track rolling amplitude of respiration for adaptive normalization
+    respACWindow.push(respAC);
+    if (respACWindow.length > 50) respACWindow.shift(); // ~2.0 seconds
+
+    let minAC = Infinity, maxAC = -Infinity;
+    for (let i = 0; i < respACWindow.length; i++) {
+      if (respACWindow[i] < minAC) minAC = respACWindow[i];
+      if (respACWindow[i] > maxAC) maxAC = respACWindow[i];
+    }
+    const acSpan = Math.max(40, maxAC - minAC);
+    const halfSpan = acSpan / 2;
+
+    // Live Breathing Expansion Bar (smoothly adapts to any shallow or deep breathing depth)
     if (breathBar) {
-      const breathPct = Math.max(5, Math.min(95, 50 + (respAC / 60) * 50));
+      const breathPct = Math.max(5, Math.min(95, Math.round(50 + (respAC / halfSpan) * 45)));
       breathBar.style.width = breathPct + '%';
     }
 
-    // Hysteresis threshold
-    const HYST = 12;
+    // Adaptive hysteresis threshold (20% of current breathing amplitude, minimum 18 counts)
+    const HYST = Math.max(18, acSpan * 0.20);
     let newPhase = breathPhase;
+
     if (respAC > HYST) {
       newPhase = 1; // Inhaling
       if (subResp) subResp.textContent = String.fromCodePoint(0x1F32C) + ' Inhaling...';
@@ -289,12 +313,12 @@ function processTelemetry(ir, red, isFinger, ctemp) {
       }
     }
 
-    // Detect full breath cycle transition from Exhale to Inhale
+    // Detect full breath cycle transition from Exhale (-1) to Inhale (1)
     if (breathPhase === -1 && newPhase === 1) {
       if (lastBreathTime > 0) {
         const breathDurationMs = now - lastBreathTime;
-        // Covers rapid breathing (1100ms / 54 BrPM) to slow meditative breathing (12000ms / 5 BrPM)
-        if (breathDurationMs >= 1100 && breathDurationMs <= 12000) {
+        // Covers rapid panting (1.3s / 46 BrPM) to slow meditative breathing (16.5s / 3.6 BrPM)
+        if (breathDurationMs >= 1300 && breathDurationMs <= 16500) {
           breathIntervals.push(breathDurationMs);
           if (breathIntervals.length > 4) breathIntervals.shift();
 
@@ -309,10 +333,10 @@ function processTelemetry(ir, red, isFinger, ctemp) {
 
     breathPhase = newPhase;
 
-    // Clear display if breath held >16s
-    if (lastBreathTime > 0 && (now - lastBreathTime > 16000)) {
+    // Display apnea warning if breath held > 16.5s
+    if (lastBreathTime > 0 && (now - lastBreathTime > 16500)) {
       if (valResp) valResp.textContent = '--';
-      if (subResp) subResp.textContent = 'Paused / Breath Held';
+      if (subResp) subResp.textContent = 'Breath Held / Apnea (>16s)';
     }
   }
 }
@@ -349,22 +373,22 @@ function updateSpO2Gauge(spo2) {
     if (spo2Desc) spo2Desc.textContent = 'Acceptable for high altitude or exertion, but slightly below normal baseline.';
   } else if (spo2 >= 86) {
     if (valSpO2) valSpO2.style.color = '#f0883e';
-    if (subSpO2) subSpO2.textContent = 'Moderate Low';
+    if (subSpO2) subSpO2.textContent = 'Moderate Hypoxia';
     if (spo2Badge) {
       spo2Badge.textContent = 'Moderate Hypoxia (' + spo2 + '%)';
       spo2Badge.style.color = '#f0883e';
       spo2Badge.style.borderColor = '#f0883e';
     }
-    if (spo2Desc) spo2Desc.textContent = 'Diminished arterial oxygen delivery. Deep breathing or rest recommended.';
+    if (spo2Desc) spo2Desc.textContent = 'Supplemental oxygen recommended. Signs of respiratory strain or shallow breathing.';
   } else {
     if (valSpO2) valSpO2.style.color = '#f85149';
-    if (subSpO2) subSpO2.textContent = 'Critical Low!';
+    if (subSpO2) subSpO2.textContent = 'Severe Hypoxia!';
     if (spo2Badge) {
       spo2Badge.textContent = 'Severe Hypoxia (<86%)';
       spo2Badge.style.color = '#f85149';
-      spo2Badge.style.borderColor = '#f85149';
+      spo2Badge.style.borderColor = '#da3633';
     }
-    if (spo2Desc) spo2Desc.textContent = 'Critical hypoxemia level! Significant deficiency in arterial oxygenation.';
+    if (spo2Desc) spo2Desc.textContent = 'Critical clinical desaturation event! Immediate medical evaluation required.';
   }
 }
 
@@ -379,34 +403,32 @@ function updateVO2AndZones(bpm) {
     document.getElementById('zoneBox5')
   ];
 
-  // Uth-Sørensen Formula: VO2max ≈ 15.3 * (HRmax / HRrest) (standard HRmax = 190)
-  const vo2 = (15.3 * (190 / Math.max(48, bpm))).toFixed(1);
-  let vo2Rating = 'Good';
-  if (vo2 >= 52) vo2Rating = 'Superior';
-  else if (vo2 >= 45) vo2Rating = 'Excellent';
-  else if (vo2 >= 38) vo2Rating = 'Good';
-  else if (vo2 >= 32) vo2Rating = 'Fair';
-  else vo2Rating = 'Poor';
+  // Resting HR estimation: minimum HR in session
+  const minHR = sessionHR.length > 5 ? Math.min(...sessionHR) : bpm;
+  const maxHR = 190; // Standard 220 - Age (approx 30 yr developer)
+  const hrReserveRatio = Math.max(1.2, maxHR / Math.max(45, minHR));
+  const estimatedVO2Max = Math.round(15.3 * hrReserveRatio);
 
-  if (vo2Badge) vo2Badge.textContent = `VO₂ Max: ${vo2} (${vo2Rating})`;
+  if (vo2Badge) {
+    vo2Badge.textContent = `VO₂ Max: ~${estimatedVO2Max} mL/kg/min`;
+  }
 
   zoneBoxes.forEach(b => { if (b) b.classList.remove('active'); });
 
   if (bpm < 114) {
     if (zoneBoxes[0]) zoneBoxes[0].classList.add('active');
-    if (zoneDesc) zoneDesc.textContent = 'Zone 1 (Active Recovery / Warm-up): Very light intensity promoting metabolic recovery.';
+    if (zoneDesc) zoneDesc.textContent = 'Zone 1 (Active Recovery): Enhances lipid metabolism and active parasympathetic tone.';
   } else if (bpm <= 133) {
     if (zoneBoxes[1]) zoneBoxes[1].classList.add('active');
-    if (zoneDesc) zoneDesc.textContent = 'Zone 2 (Aerobic / Fat Burn): Sustainable endurance pace building mitochondrial density.';
+    if (zoneDesc) zoneDesc.textContent = 'Zone 2 (Aerobic Base): Fat oxidation, mitochondrial density development, all-day stamina.';
   } else if (bpm <= 152) {
     if (zoneBoxes[2]) zoneBoxes[2].classList.add('active');
-    if (zoneDesc) zoneDesc.textContent = 'Zone 3 (Tempo / Aerobic Endurance): Moderate aerobic conditioning improving cardiovascular stroke volume.';
+    if (zoneDesc) zoneDesc.textContent = 'Zone 3 (Tempo / Aerobic Power): Enhances stroke volume and cardiac muscle efficiency.';
   } else if (bpm <= 171) {
     if (zoneBoxes[3]) zoneBoxes[3].classList.add('active');
-    if (zoneDesc) zoneDesc.textContent = 'Zone 4 (Anaerobic Threshold / Hard): High intensity interval pace near lactate threshold.';
+    if (zoneDesc) zoneDesc.textContent = 'Zone 4 (Lactate Threshold): High intensity, anaerobic threshold training, rapid lactate accumulation.';
   } else {
     if (zoneBoxes[4]) zoneBoxes[4].classList.add('active');
-    if (zoneDesc) zoneDesc.textContent = 'Zone 5 (Peak / VO₂ Max Effort): Maximum aerobic capacity sprint, unsustainable for prolonged periods.';
+    if (zoneDesc) zoneDesc.textContent = 'Zone 5 (Neuromuscular Peak): Maximum cardiovascular output and respiratory exchange ratio (RER > 1.0).';
   }
 }
-

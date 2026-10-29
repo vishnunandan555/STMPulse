@@ -122,7 +122,8 @@ The Web Serial API enables direct bidirectional communication between modern web
 
 | Tool | UI Trigger | Description |
 |:---|:---|:---|
-| **Speed Controller** | `[0.5x]` `[1.0x]` `[2.0x]` `[⚡ MAX]` | Toggles visible sample window from 200 pts (~8s) down to 25 pts (~1s high-speed sweep). |
+| **Speed Controller** | `[0.5x]` `[1.0x]` `[2.0x]` `[⚡ MAX]` | Controls waveform sweep speed and time scale. |
+| **Window Controller** | `[Low (2.4s)]` `[Med (6s)]` `[High (12s)]` | Sets sliding memory depth and autoscaling bounds across all waveform charts. |
 | **Pause / Freeze** | `[⏸ Pause]` / `[▶ Resume]` | Freezes all 5 canvases simultaneously with yellow `PAUSED` overlays for waveform inspection. |
 | **Pulse Audio Tone** | `[🔊 Audio Beep]` | Web Audio API synthesizer generating a 60ms pulse tone per heartbeat, pitch-modulated by SpO₂. |
 | **CSV Telemetry Export** | `[📥 Export CSV]` | Exports all recorded telemetry into a formatted `.csv` file with 11 sensor channels for Excel/Python. |

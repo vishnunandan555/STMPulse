@@ -1,4 +1,4 @@
-// High-Performance HTML5 Canvas Rendering Engine
+// High-Performance HTML5 Canvas Rendering Engine with HiDPI Resolution & Aspect-Ratio Normalization
 let irScaleMin = 0, irScaleMax = 10000;
 let redScaleMin = 0, redScaleMax = 10000;
 
@@ -7,15 +7,48 @@ const trendBPM = new Array(TREND_POINTS).fill(null);
 const trendSpO2 = new Array(TREND_POINTS).fill(null);
 let lastTrendTime = 0;
 
-function drawPPGChart(canvas, ctx) {
-  if (!canvas || !ctx) return;
-  const width = canvas.width;
-  const height = canvas.height;
+/**
+ * HiDPI & Responsive Canvas Resolution Synchronizer
+ * Eliminates raster stretching and keeps text and waveforms razor-sharp
+ * regardless of monitor DPI, browser zoom, or window resizing.
+ */
+function prepareCanvas(canvas) {
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const displayW = Math.round(rect.width);
+  const displayH = Math.round(rect.height || 180);
+
+  // If container is hidden (e.g., inactive tab), skip render
+  if (displayW <= 0 || displayH <= 0) return null;
+
+  const targetW = Math.round(displayW * dpr);
+  const targetH = Math.round(displayH * dpr);
+
+  if (canvas.width !== targetW || canvas.height !== targetH) {
+    canvas.width = targetW;
+    canvas.height = targetH;
+  }
+
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  // Map drawing coordinates to CSS logical pixels
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, width: displayW, height: displayH };
+}
+
+/**
+ * 1. Photoplethysmogram (PPG) Pulse Waveform
+ */
+function drawPPGChart(canvas) {
+  const prep = prepareCanvas(canvas);
+  if (!prep) return;
+  const { ctx, width, height } = prep;
 
   ctx.fillStyle = '#090d13';
   ctx.fillRect(0, 0, width, height);
 
-  // Grid lines
+  // Background grid
   ctx.strokeStyle = '#161e27';
   ctx.lineWidth = 1;
   for (let y = 30; y < height; y += 30) {
@@ -25,7 +58,9 @@ function drawPPGChart(canvas, ctx) {
     ctx.stroke();
   }
 
-  const startIdx = MAX_BUFFER - visiblePoints;
+  const pointsCount = Math.min(MAX_BUFFER, (typeof windowSamples !== 'undefined' ? windowSamples : visiblePoints) || 100);
+  const startIdx = MAX_BUFFER - pointsCount;
+
   let min = Infinity, max = -Infinity;
   for (let i = startIdx; i < MAX_BUFFER; i++) {
     if (waveform[i] < min) min = waveform[i];
@@ -41,6 +76,17 @@ function drawPPGChart(canvas, ctx) {
   const range = (max - min) || 1;
   const padding = 20;
 
+  // Header / Scale text (rendered crisp with zero distortion)
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", monospace';
+  ctx.fillText('Peak AC: +' + Math.round(max), 8, 16);
+  ctx.fillText('Trough AC: ' + Math.round(min), 8, height - 8);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#f85149';
+  ctx.fillText(`PPG Pulse Trace (${(pointsCount / 25).toFixed(1)}s window)`, width - 10, 16);
+  ctx.textAlign = 'left';
+
   // Pulsatile line
   ctx.beginPath();
   ctx.lineWidth = 2.4;
@@ -48,7 +94,7 @@ function drawPPGChart(canvas, ctx) {
   ctx.lineJoin = 'round';
 
   for (let i = startIdx; i < MAX_BUFFER; i++) {
-    const x = ((i - startIdx) / (visiblePoints - 1)) * width;
+    const x = ((i - startIdx) / (pointsCount - 1)) * width;
     const norm = (waveform[i] - min) / range;
     const y = (height - padding) - (norm * (height - 2 * padding));
 
@@ -57,16 +103,22 @@ function drawPPGChart(canvas, ctx) {
   }
   ctx.stroke();
 
+  // Gradient area fill
   ctx.lineTo(width, height);
   ctx.lineTo(0, height);
   ctx.fillStyle = 'rgba(248, 81, 73, 0.08)';
   ctx.fill();
+
+  ctx.restore();
 }
 
-function drawRespChart(canvas, ctx) {
-  if (!canvas || !ctx) return;
-  const width = canvas.width;
-  const height = canvas.height;
+/**
+ * 2. Respiration Sine Waveform (0.15–0.35 Hz)
+ */
+function drawRespChart(canvas) {
+  const prep = prepareCanvas(canvas);
+  if (!prep) return;
+  const { ctx, width, height } = prep;
 
   ctx.fillStyle = '#090d13';
   ctx.fillRect(0, 0, width, height);
@@ -90,7 +142,9 @@ function drawRespChart(canvas, ctx) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  const startIdx = MAX_BUFFER - visiblePoints;
+  const pointsCount = Math.min(MAX_BUFFER, (typeof windowSamples !== 'undefined' ? windowSamples : visiblePoints) || 100);
+  const startIdx = MAX_BUFFER - pointsCount;
+
   let min = Infinity, max = -Infinity;
   for (let i = startIdx; i < MAX_BUFFER; i++) {
     const v = respWaveform[i];
@@ -110,26 +164,26 @@ function drawRespChart(canvas, ctx) {
   const range = (max - min) || 1;
   const padding = 16;
 
-  // Axis labels
+  // Crisp Axis labels
   ctx.fillStyle = '#8b949e';
-  ctx.font = '11px monospace';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", monospace';
   ctx.fillText('Inhale (+): ' + Math.round(max), 8, 16);
   ctx.fillText('Baseline (0)', 8, height / 2 - 4);
   ctx.fillText('Exhale (-): ' + Math.round(min), 8, height - 8);
 
   ctx.textAlign = 'right';
   ctx.fillStyle = '#3fb950';
-  ctx.fillText('🌬 Breath Sine-Wave (0.15–0.35 Hz)', width - 10, 16);
+  ctx.fillText(`🌬 Breath Wave (${(pointsCount / 25).toFixed(1)}s window)`, width - 10, 16);
   ctx.textAlign = 'left';
 
-  // Curve
+  // Smooth Respiration curve
   ctx.beginPath();
   ctx.lineWidth = 2.4;
   ctx.strokeStyle = '#2ea043';
   ctx.lineJoin = 'round';
 
   for (let i = startIdx; i < MAX_BUFFER; i++) {
-    const x = ((i - startIdx) / (visiblePoints - 1)) * width;
+    const x = ((i - startIdx) / (pointsCount - 1)) * width;
     const norm = (respWaveform[i] - min) / range;
     const y = (height - padding) - (norm * (height - 2 * padding));
     if (i === startIdx) ctx.moveTo(x, y);
@@ -142,12 +196,17 @@ function drawRespChart(canvas, ctx) {
   ctx.lineTo(0, height / 2);
   ctx.fillStyle = 'rgba(46, 160, 67, 0.08)';
   ctx.fill();
+
+  ctx.restore();
 }
 
-function drawSingleRawChart(canvas, ctx, history, strokeColor, isIR) {
-  if (!canvas || !ctx) return;
-  const width = canvas.width;
-  const height = canvas.height;
+/**
+ * 3. Raw Photodiode Channels (Raw IR / Raw Red)
+ */
+function drawSingleRawChart(canvas, history, strokeColor, isIR) {
+  const prep = prepareCanvas(canvas);
+  if (!prep) return;
+  const { ctx, width, height } = prep;
 
   ctx.fillStyle = '#090d13';
   ctx.fillRect(0, 0, width, height);
@@ -161,7 +220,9 @@ function drawSingleRawChart(canvas, ctx, history, strokeColor, isIR) {
     ctx.stroke();
   }
 
-  const startIdx = MAX_BUFFER - visiblePoints;
+  const pointsCount = Math.min(MAX_BUFFER, (typeof windowSamples !== 'undefined' ? windowSamples : visiblePoints) || 100);
+  const startIdx = MAX_BUFFER - pointsCount;
+
   let minVal = Infinity, maxVal = -Infinity;
   let count = 0;
   for (let i = startIdx; i < MAX_BUFFER; i++) {
@@ -208,6 +269,7 @@ function drawSingleRawChart(canvas, ctx, history, strokeColor, isIR) {
   const range = (currentMax - currentMin) || 1;
   const padding = 20;
 
+  // Center dashed midline
   ctx.strokeStyle = 'rgba(139, 148, 158, 0.22)';
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
@@ -216,23 +278,25 @@ function drawSingleRawChart(canvas, ctx, history, strokeColor, isIR) {
   ctx.stroke();
   ctx.setLineDash([]);
 
+  // Axis text labels
   const avg = (currentMax + currentMin) / 2;
   ctx.fillStyle = '#8b949e';
-  ctx.font = '11px monospace';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", monospace';
   ctx.fillText('Max: ' + Math.round(currentMax).toLocaleString(), 8, 16);
   ctx.fillText('Mid: ' + Math.round(avg).toLocaleString(), 8, height / 2 - 4);
   ctx.fillText('Min: ' + Math.round(currentMin).toLocaleString(), 8, height - 8);
 
   const deltaSpan = Math.round(currentMax - currentMin);
   ctx.textAlign = 'right';
-  ctx.fillText('Window: ±' + Math.round(deltaSpan / 2).toLocaleString() + ' counts', width - 10, 16);
+  ctx.fillText(`Window: ±${Math.round(deltaSpan / 2).toLocaleString()} counts (${(pointsCount / 25).toFixed(1)}s)`, width - 10, 16);
   ctx.textAlign = 'left';
 
+  // Curve
   ctx.beginPath();
   ctx.lineWidth = 1.8;
   ctx.strokeStyle = strokeColor;
   for (let i = startIdx; i < MAX_BUFFER; i++) {
-    const x = ((i - startIdx) / (visiblePoints - 1)) * width;
+    const x = ((i - startIdx) / (pointsCount - 1)) * width;
     const norm = (history[i] - currentMin) / range;
     const y = (height - padding) - (norm * (height - 2 * padding));
     if (i === startIdx) ctx.moveTo(x, y);
@@ -240,16 +304,22 @@ function drawSingleRawChart(canvas, ctx, history, strokeColor, isIR) {
   }
   ctx.stroke();
 
+  // Shaded area
   ctx.lineTo(width, height);
   ctx.lineTo(0, height);
   ctx.fillStyle = isIR ? 'rgba(56, 189, 248, 0.05)' : 'rgba(251, 146, 60, 0.05)';
   ctx.fill();
+
+  ctx.restore();
 }
 
-function drawTrendChart(canvas, ctx) {
-  if (!canvas || !ctx) return;
-  const width = canvas.width;
-  const height = canvas.height;
+/**
+ * 4. 60-Second Physiological Trend Line
+ */
+function drawTrendChart(canvas) {
+  const prep = prepareCanvas(canvas);
+  if (!prep) return;
+  const { ctx, width, height } = prep;
 
   ctx.fillStyle = '#090d13';
   ctx.fillRect(0, 0, width, height);
@@ -274,7 +344,7 @@ function drawTrendChart(canvas, ctx) {
 
   // Left axis (Heart Rate 40-160 BPM)
   ctx.fillStyle = '#f85149';
-  ctx.font = '10px monospace';
+  ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", monospace';
   ctx.fillText('160 BPM', 8, 14);
   ctx.fillText('100 BPM', 8, height / 2);
   ctx.fillText('40 BPM', 8, height - 6);
@@ -320,5 +390,6 @@ function drawTrendChart(canvas, ctx) {
     }
   }
   ctx.stroke();
-}
 
+  ctx.restore();
+}

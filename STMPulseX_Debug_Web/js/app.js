@@ -1,4 +1,4 @@
-﻿// Application State, WebSerial Communication & UI Navigation Controller
+// Application State, WebSerial Communication & UI Navigation Controller
 let port = null;
 let reader = null;
 let keepReading = false;

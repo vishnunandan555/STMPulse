@@ -321,3 +321,4 @@ function drawTrendChart(canvas, ctx) {
   }
   ctx.stroke();
 }
+

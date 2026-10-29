@@ -409,3 +409,4 @@ function updateVO2AndZones(bpm) {
     if (zoneDesc) zoneDesc.textContent = 'Zone 5 (Peak / VO₂ Max Effort): Maximum aerobic capacity sprint, unsustainable for prolonged periods.';
   }
 }
+

@@ -46,3 +46,4 @@ function playPulseBeep(spo2Val) {
     osc.stop(audioCtx.currentTime + 0.06);
   } catch (e) {}
 }
+

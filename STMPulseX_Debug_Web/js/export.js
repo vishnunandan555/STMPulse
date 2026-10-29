@@ -96,3 +96,4 @@ function exportCSV() {
   document.body.removeChild(link);
   showToast(`✔ Exported ${sessionRecords.length} records!`);
 }
+

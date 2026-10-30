@@ -207,6 +207,40 @@ function parseDataLine(line) {
 
     processTelemetry(ir, red, isFinger, ctemp);
   }
+
+  // Match TMP117 Medical Grade Environment Temp
+  const tmp117Match = line.match(/TMP117:\s*([0-9.-]+)\s*C/i);
+  if (tmp117Match) {
+    const t117 = parseFloat(tmp117Match[1]);
+    currentTMP117Temp = t117;
+    const valTmp117 = document.getElementById('valTmp117');
+    if (valTmp117) valTmp117.textContent = t117.toFixed(2);
+    const envTmp117Val = document.getElementById('envTmp117Val');
+    if (envTmp117Val) envTmp117Val.textContent = `${t117.toFixed(2)} °C`;
+
+    // Clinical Peripheral Gradient (Skin - TMP117 Air)
+    const valSkinTemp = document.getElementById('valSkinTemp');
+    if (valSkinTemp && valSkinTemp.textContent !== '--') {
+      const skinT = parseFloat(valSkinTemp.textContent);
+      const grad = skinT - t117;
+      const sign = grad >= 0 ? '+' : '';
+      const envTmpGradientVal = document.getElementById('envTmpGradientVal');
+      if (envTmpGradientVal) {
+        envTmpGradientVal.textContent = `${sign}${grad.toFixed(2)} °C`;
+        envTmpGradientVal.style.color = grad >= 0 ? '#3fb950' : '#f0883e';
+      }
+    }
+  }
+
+  // Match MPU6050 Accelerometer & Sleep Actigraphy
+  const imuMatch = line.match(/IMU:\s*Ax=([0-9.-]+),\s*Ay=([0-9.-]+),\s*Az=([0-9.-]+),\s*Mot=([0-9.-]+)/i);
+  if (imuMatch) {
+    const ax = parseInt(imuMatch[1], 10);
+    const ay = parseInt(imuMatch[2], 10);
+    const az = parseInt(imuMatch[3], 10);
+    const mot = parseInt(imuMatch[4], 10);
+    processIMUTelemetry(ax, ay, az, mot);
+  }
 }
 
 // 60 FPS Render Loop (draws active canvases with HiDPI crispness)
@@ -247,6 +281,10 @@ function render() {
     const rawRedCanvas = document.getElementById('rawRedCanvas');
     if (rawRedCanvas && rawRedCanvas.offsetParent !== null) {
       drawSingleRawChart(rawRedCanvas, rawRedHistory, '#fb923c', false);
+    }
+    const sleepCanvas = document.getElementById('sleepCanvas');
+    if (sleepCanvas && sleepCanvas.offsetParent !== null) {
+      drawSleepChart(sleepCanvas);
     }
     const rawDiffCanvas = document.getElementById('rawDiffCanvas');
     if (rawDiffCanvas && rawDiffCanvas.offsetParent !== null) {

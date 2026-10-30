@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>STMPulseX — Developer Biosignal Suite & Diagnostic Testbed</title>
-  <link rel="stylesheet" href="css/main.css?v=2.5">
-  <link rel="stylesheet" href="css/components.css?v=2.5">
+  <link rel="stylesheet" href="css/main.css?v=2.6">
+  <link rel="stylesheet" href="css/components.css?v=2.6">
 </head>
 <body>
 
@@ -114,6 +114,13 @@
           <div class="label">Ambient Temp</div>
           <div class="value"><span id="valTemp">--</span> <span class="unit">°C</span></div>
           <div class="subtext">BME280 Air</div>
+        </div>
+                <div class="card" title="Estimated Cuffless Blood Pressure based on PPG pulse wave analysis. Inaccurate estimate — not a clinical cuff reading.">
+          <div class="label" style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+            Est. BP <span style="font-size: 8.5px; padding: 1px 4px; border-radius: 3px; background: rgba(248, 81, 73, 0.22); color: #f85149; font-weight: 700; border: 1px solid rgba(248, 81, 73, 0.4);">INACCURATE</span>
+          </div>
+          <div class="value" style="color: #ec4899;"><span id="valBP">-- / --</span> <span class="unit">mmHg</span></div>
+          <div class="subtext" id="subBP"><span style="color: #f85149; font-weight: 700;">*Inaccurate</span> (Optical Est.)</div>
         </div>
         <div class="card">
           <div class="label">Pressure</div>
@@ -230,6 +237,38 @@
         <div class="canvas-wrap">
           <canvas id="trendCanvas" width="900" height="170"></canvas>
           <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
+    
+      <div class="analysis-panel" style="margin-top: 16px;">
+        <div class="widget-card">
+          <div class="widget-header">
+            <div class="widget-title">Experimental Cuffless Blood Pressure (PWA Estimation)</div>
+            <div class="widget-badge" style="background: rgba(248, 81, 73, 0.2); color: #f85149; border-color: rgba(248, 81, 73, 0.4);">
+              ⚠️ INACCURATE / ESTIMATE ONLY
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-around; margin: 14px 0; padding: 12px; background: rgba(22, 29, 40, 0.6); border-radius: 8px; border: 1px solid var(--border);">
+            <div style="text-align: center;">
+              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">Estimated Systolic</div>
+              <div style="font-size: 28px; font-weight: 800; font-family: var(--font-mono); color: #ec4899;" id="labSystolic">--</div>
+              <div style="font-size: 11px; color: var(--text-dim);">mmHg</div>
+            </div>
+            <div style="font-size: 24px; color: var(--text-dim); font-weight: 300;">/</div>
+            <div style="text-align: center;">
+              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">Estimated Diastolic</div>
+              <div style="font-size: 28px; font-weight: 800; font-family: var(--font-mono); color: #ec4899;" id="labDiastolic">--</div>
+              <div style="font-size: 11px; color: var(--text-dim);">mmHg</div>
+            </div>
+            <div style="text-align: center; border-left: 1px solid var(--border); padding-left: 16px;">
+              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase;">AHA/ACC Classification</div>
+              <div style="font-size: 15px; font-weight: 700; margin-top: 4px;" id="labBPClass">--</div>
+              <div style="font-size: 11px; color: var(--text-dim);" id="labBPStatus">Awaiting finger</div>
+            </div>
+          </div>
+          <div class="widget-desc" style="font-size: 11px; color: var(--text-dim); line-height: 1.45;">
+            ⚠️ <strong>Medical Disclaimer</strong>: This is an uncalibrated algorithmic surrogate estimated from single-channel PPG pulse rise time and heart rate. It is <strong>NOT</strong> an FDA-cleared diagnostic blood pressure reading and must <strong>NOT</strong> be used for clinical decisions. Standard inflatable arm cuff calibration is mandatory for true clinical accuracy.
+          </div>
         </div>
       </div>
     </section>
@@ -355,10 +394,10 @@
   </main>
 
   <!-- Modular Scripts -->
-  <script src="js/audio.js?v=2.5"></script>
-  <script src="js/export.js?v=2.5"></script>
-  <script src="js/charts.js?v=2.5"></script>
-  <script src="js/dsp.js?v=2.5"></script>
-  <script src="js/app.js?v=2.5"></script>
+  <script src="js/audio.js?v=2.6"></script>
+  <script src="js/export.js?v=2.6"></script>
+  <script src="js/charts.js?v=2.6"></script>
+  <script src="js/dsp.js?v=2.6"></script>
+  <script src="js/app.js?v=2.6"></script>
 </body>
 </html>

@@ -130,16 +130,16 @@
 }
 
 /* On standard / widescreen desktop: All 9 cards fit on 1 sleek row */
-@media (min-width: 1360px) {
+@media (min-width: 1440px) {
   .grid {
-    grid-template-columns: repeat(9, 1fr);
+    grid-template-columns: repeat(10, 1fr);
   }
 }
 
-/* On medium / laptop screens: 3 rows of 3 cards (perfect 3x3, zero orphans) */
-@media (min-width: 820px) and (max-width: 1359px) {
+/* On medium / laptop screens: 2 rows of 5 cards (perfect 2x5, zero orphans) */
+@media (min-width: 820px) and (max-width: 1439px) {
   .grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(5, 1fr);
   }
 }
 
@@ -453,3 +453,9 @@ canvas {
   margin-left: 8px;
 }
 .toast.show { opacity: 1; }
+
+/* Sleep State & Actigraphy Indicators */
+.sleep-restful { color: #3fb950 !important; text-shadow: 0 0 10px rgba(63, 185, 80, 0.4); }
+.sleep-light { color: #38bdf8 !important; text-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
+.sleep-restless { color: #f85149 !important; text-shadow: 0 0 10px rgba(248, 81, 73, 0.4); }
+

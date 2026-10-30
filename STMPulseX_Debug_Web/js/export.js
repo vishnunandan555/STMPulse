@@ -63,26 +63,42 @@ function exportCSV() {
     'Elapsed_ms',
     'HeartRate_BPM',
     'SpO2_Pct',
+    'Estimated_BP_mmHg',
     'PerfusionIndex_Pct',
     'HRV_RMSSD_ms',
     'Respiration_BrPM',
     'SkinTemp_C',
     'AmbientTemp_C',
+    'TMP117_Ambient_C',
     'Humidity_Pct',
-    'Pressure_hPa'
+    'Pressure_hPa',
+    'Accel_X_mg',
+    'Accel_Y_mg',
+    'Accel_Z_mg',
+    'Motion_mg',
+    'Sleep_State',
+    'Sleep_Posture'
   ];
   const rows = sessionRecords.map(r => [
     r.iso,
     r.tMs,
     r.bpm,
     r.spo2,
+    r.bp || '',
     r.pi,
     r.hrv,
     r.resp,
     r.skinTemp,
     r.envTemp,
+    r.tmp117Temp || '',
     r.hum,
-    r.press
+    r.press,
+    r.ax !== undefined ? r.ax : '',
+    r.ay !== undefined ? r.ay : '',
+    r.az !== undefined ? r.az : '',
+    r.mot !== undefined ? r.mot : '',
+    r.sleepState || '',
+    r.posture || ''
   ].join(','));
 
   const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');

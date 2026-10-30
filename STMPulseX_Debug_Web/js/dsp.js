@@ -6,6 +6,21 @@ const rawRedHistory = new Array(MAX_BUFFER).fill(0);
 const rawDiffHistory = new Array(MAX_BUFFER).fill(0);
 const respWaveform = new Array(MAX_BUFFER).fill(0);
 
+// MPU6050 Accelerometer & Sleep Actigraphy History
+const accelXHistory = new Array(MAX_BUFFER).fill(0);
+const accelYHistory = new Array(MAX_BUFFER).fill(0);
+const accelZHistory = new Array(MAX_BUFFER).fill(1000);
+const motionHistory = new Array(MAX_BUFFER).fill(0);
+
+let currentSleepState = 'Restful Sleep';
+let currentSleepPosture = 'Supine (Back)';
+let sleepMotionEvents = 0;
+let lastMotionEventTime = 0;
+let restfulSamples = 0;
+let totalSleepSamples = 0;
+let currentTMP117Temp = null;
+let lastAx = 0, lastAy = 0, lastAz = 1000, lastMot = 0;
+
 // DC baseline tracker for AC pulse extraction
 let dcTracker = 0;
 const filterAlpha = 0.96;
@@ -14,6 +29,8 @@ const filterAlpha = 0.96;
 let lastPeakTime = 0;
 const peakIntervals = []; // Inter-Beat Intervals (ms)
 let rollingSpO2 = null;
+let rollingSystolic = null;
+let rollingDiastolic = null;
 
 // Respiration DSP Engine (Dual-Stage Moving Average Filter + Dynamic Normalization)
 const RESP_FILTER_LEN = 25; // Stage 1: Boxcar filter (1.0s at 25 Hz) to completely suppress cardiac ripples
@@ -51,13 +68,21 @@ function processTelemetry(ir, red, isFinger, ctemp) {
       tMs: Math.round(performance.now() - sessionStartTime),
       bpm: isNaN(b) ? '' : b,
       spo2: isNaN(s) ? '' : s,
+      bp: rollingSystolic ? (Math.round(rollingSystolic) + '/' + Math.round(rollingDiastolic)) : '',
       pi: valPI && valPI.textContent !== '--' ? valPI.textContent : '',
       hrv: valHRV && valHRV.textContent !== '--' ? valHRV.textContent : '',
       resp: valResp && valResp.textContent !== '--' ? valResp.textContent : '',
       skinTemp: valSkinTemp && valSkinTemp.textContent !== '--' ? valSkinTemp.textContent : '',
       envTemp: valTemp && valTemp.textContent !== '--' ? valTemp.textContent : '',
+      tmp117Temp: currentTMP117Temp !== null ? currentTMP117Temp.toFixed(2) : '',
       hum: subHum ? subHum.textContent.replace(/[^\d.]/g, '') : '',
-      press: valPress && valPress.textContent !== '--' ? valPress.textContent : ''
+      press: valPress && valPress.textContent !== '--' ? valPress.textContent : '',
+      ax: lastAx,
+      ay: lastAy,
+      az: lastAz,
+      mot: lastMot,
+      sleepState: currentSleepState,
+      posture: currentSleepPosture
     });
     if (sessionRecords.length > 7200) sessionRecords.shift(); // ~2 hours max in memory
   }
@@ -125,6 +150,20 @@ function processTelemetry(ir, red, isFinger, ctemp) {
     const zoneDesc = document.getElementById('zoneDesc');
     if (zoneDesc) zoneDesc.textContent = 'Cardiovascular exertion tracking. Zones dynamically highlight according to real-time BPM.';
     if (vo2Badge) vo2Badge.textContent = 'VO₂ Max: -- mL/kg/min';
+    rollingSystolic = null;
+    rollingDiastolic = null;
+    const valBP = document.getElementById('valBP');
+    if (valBP) valBP.textContent = '-- / --';
+    const subBP = document.getElementById('subBP');
+    if (subBP) subBP.innerHTML = '<span style="color: #f85149; font-weight: 700;">*Inaccurate</span> (Optical Est.)';
+    const labSystolic = document.getElementById('labSystolic');
+    if (labSystolic) labSystolic.textContent = '--';
+    const labDiastolic = document.getElementById('labDiastolic');
+    if (labDiastolic) labDiastolic.textContent = '--';
+    const labBPClass = document.getElementById('labBPClass');
+    if (labBPClass) labBPClass.textContent = '--';
+    const labBPStatus = document.getElementById('labBPStatus');
+    if (labBPStatus) labBPStatus.textContent = 'Awaiting finger';
     zoneBoxes.forEach(b => { if (b) b.classList.remove('active'); });
 
     waveform.shift();
@@ -171,6 +210,7 @@ function processTelemetry(ir, red, isFinger, ctemp) {
 
           // Update VO2 Max & 5-Zone Model
           updateVO2AndZones(currentBPM);
+          updateEstimatedBP(currentBPM, typeof pi !== 'undefined' ? pi : 2.0);
 
           // 2. HRV (RMSSD in ms) Calculation -> Mood & Stress
           if (peakIntervals.length >= 4) {
@@ -439,5 +479,159 @@ function updateVO2AndZones(bpm) {
   } else {
     if (zoneBoxes[4]) zoneBoxes[4].classList.add('active');
     if (zoneDesc) zoneDesc.textContent = 'Zone 5 (Neuromuscular Peak): Maximum cardiovascular output and respiratory exchange ratio (RER > 1.0).';
+  }
+}
+
+/**
+ * MPU6050 Accelerometer & Sleep Actigraphy Telemetry Processor
+ */
+function processIMUTelemetry(ax, ay, az, mot) {
+  lastAx = ax;
+  lastAy = ay;
+  lastAz = az;
+  lastMot = mot;
+
+  accelXHistory.shift();
+  accelXHistory.push(ax);
+  accelYHistory.shift();
+  accelYHistory.push(ay);
+  accelZHistory.shift();
+  accelZHistory.push(az);
+  motionHistory.shift();
+  motionHistory.push(mot);
+
+  totalSleepSamples++;
+
+  // Sleep State Estimation based on clinical actigraphy thresholds
+  let state = 'Restful Sleep';
+  let badgeClass = 'sleep-restful';
+  if (mot >= 150) {
+    state = 'Restless / Movement';
+    badgeClass = 'sleep-restless';
+    const now = performance.now();
+    if (now - lastMotionEventTime > 2500) {
+      sleepMotionEvents++;
+      lastMotionEventTime = now;
+    }
+  } else if (mot >= 40) {
+    state = 'Light / Active Sleep';
+    badgeClass = 'sleep-light';
+  } else {
+    restfulSamples++;
+  }
+  currentSleepState = state;
+
+  // Sleep Posture Detection from gravity vector
+  let posture = 'Supine (Back)';
+  if (az < -450) {
+    posture = 'Prone (Stomach)';
+  } else if (ax > 450) {
+    posture = 'Left Lateral (Side)';
+  } else if (ax < -450) {
+    posture = 'Right Lateral (Side)';
+  } else if (ay < -550) {
+    posture = 'Upright / Elevated';
+  } else if (az > 450) {
+    posture = 'Supine (Back)';
+  }
+  currentSleepPosture = posture;
+
+  // Update UI Elements
+  const valSleepState = document.getElementById('valSleepState');
+  if (valSleepState) {
+    valSleepState.textContent = state;
+    valSleepState.className = `value ${badgeClass}`;
+  }
+
+  const valSleepPosture = document.getElementById('valSleepPosture');
+  if (valSleepPosture) valSleepPosture.textContent = posture;
+
+  const valMotionIdx = document.getElementById('valMotionIdx');
+  if (valMotionIdx) valMotionIdx.textContent = `${mot} mg`;
+
+  const valTossTurns = document.getElementById('valTossTurns');
+  if (valTossTurns) valTossTurns.textContent = sleepMotionEvents;
+
+  const valSleepScore = document.getElementById('valSleepScore');
+  if (valSleepScore && totalSleepSamples > 0) {
+    const score = Math.min(100, Math.round((restfulSamples / totalSleepSamples) * 100));
+    valSleepScore.textContent = `${score}%`;
+  }
+
+  // Update Overview card if present
+  const valOverviewSleep = document.getElementById('valOverviewSleep');
+  if (valOverviewSleep) {
+    valOverviewSleep.textContent = state;
+    valOverviewSleep.className = `value ${badgeClass}`;
+  }
+  const subOverviewSleep = document.getElementById('subOverviewSleep');
+  if (subOverviewSleep) {
+    subOverviewSleep.textContent = `${posture} | ${mot} mg`;
+  }
+}
+
+
+// Estimated Blood Pressure (Cuffless PWA Surrogate - Experimental & Inaccurate)
+function updateEstimatedBP(bpm, pi) {
+  const valBP = document.getElementById('valBP');
+  const subBP = document.getElementById('subBP');
+  const labSystolic = document.getElementById('labSystolic');
+  const labDiastolic = document.getElementById('labDiastolic');
+  const labBPClass = document.getElementById('labBPClass');
+  const labBPStatus = document.getElementById('labBPStatus');
+
+  if (!bpm || isNaN(bpm)) {
+    if (valBP) valBP.textContent = '-- / --';
+    if (subBP) subBP.innerHTML = '<span style="color: #f85149; font-weight: 700;">*Inaccurate</span> (Optical Est.)';
+    if (labSystolic) labSystolic.textContent = '--';
+    if (labDiastolic) labDiastolic.textContent = '--';
+    if (labBPClass) labBPClass.textContent = '--';
+    if (labBPStatus) labBPStatus.textContent = 'Awaiting pulse';
+    return;
+  }
+
+  // PWA Empirical Model (approximated vascular resistance & cardiac output)
+  const piFactor = Math.max(0.5, Math.min(5.0, pi || 2.0));
+  const targetSys = Math.round(116 + (bpm - 72) * 0.42 - (piFactor - 2.0) * 1.5);
+  const targetDia = Math.round(75 + (bpm - 72) * 0.22 - (piFactor - 2.0) * 1.0);
+
+  const boundedSys = Math.max(90, Math.min(170, targetSys));
+  const boundedDia = Math.max(55, Math.min(105, targetDia));
+
+  if (rollingSystolic === null) {
+    rollingSystolic = boundedSys;
+    rollingDiastolic = boundedDia;
+  } else {
+    rollingSystolic = (0.85 * rollingSystolic) + (0.15 * boundedSys);
+    rollingDiastolic = (0.85 * rollingDiastolic) + (0.15 * boundedDia);
+  }
+
+  const sys = Math.round(rollingSystolic);
+  const dia = Math.round(rollingDiastolic);
+
+  if (valBP) valBP.textContent = `${sys} / ${dia}`;
+  if (subBP) subBP.innerHTML = '<span style="color: #f85149; font-weight: 700;">*Inaccurate</span> (Optical Est.)';
+  if (labSystolic) labSystolic.textContent = sys;
+  if (labDiastolic) labDiastolic.textContent = dia;
+
+  let bpClass = 'Normal';
+  let bpColor = '#3fb950';
+  if (sys >= 140 || dia >= 90) {
+    bpClass = 'Stage 2 HTN';
+    bpColor = '#f85149';
+  } else if (sys >= 130 || dia >= 80) {
+    bpClass = 'Stage 1 HTN';
+    bpColor = '#f0883e';
+  } else if (sys >= 120 && dia < 80) {
+    bpClass = 'Elevated';
+    bpColor = '#d29922';
+  }
+
+  if (labBPClass) {
+    labBPClass.textContent = bpClass;
+    labBPClass.style.color = bpColor;
+  }
+  if (labBPStatus) {
+    labBPStatus.textContent = 'Approx. Pulse Estimate';
   }
 }

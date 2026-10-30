@@ -505,3 +505,108 @@ function drawTrendChart(canvas) {
 
   ctx.restore();
 }
+
+/**
+ * 6. MPU6050 3-Axis Actigraphy & Sleep Motion Chart
+ */
+function drawSleepChart(canvas) {
+  const prep = prepareCanvas(canvas);
+  if (!prep) return;
+  const { ctx, width, height } = prep;
+
+  ctx.fillStyle = '#090d13';
+  ctx.fillRect(0, 0, width, height);
+
+  // Background grid
+  ctx.strokeStyle = '#161e27';
+  ctx.lineWidth = 1;
+  const midY = height / 2;
+  const y1gTop = midY - (height * 0.25);
+  const y1gBot = midY + (height * 0.25);
+
+  // Reference lines
+  ctx.strokeStyle = '#21262d';
+  ctx.beginPath();
+  ctx.moveTo(0, midY);
+  ctx.lineTo(width, midY);
+  ctx.stroke();
+
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = '#30363d';
+  ctx.beginPath();
+  ctx.moveTo(0, y1gTop); ctx.lineTo(width, y1gTop);
+  ctx.moveTo(0, y1gBot); ctx.lineTo(width, y1gBot);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Axis labels
+  ctx.fillStyle = '#6e7681';
+  ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace';
+  ctx.fillText('+2000 mg (+2G)', 8, 12);
+  ctx.fillText('+1000 mg (+1G)', 8, y1gTop - 3);
+  ctx.fillText('0 mg (Center)', 8, midY - 3);
+  ctx.fillText('-1000 mg (-1G)', 8, y1gBot - 3);
+  ctx.fillText('-2000 mg (-2G)', 8, height - 4);
+
+  const count = Math.min(visiblePoints, MAX_BUFFER);
+  const startIdx = MAX_BUFFER - count;
+
+  function toY(valMg) {
+    // Range -2000 to +2000 mg
+    const clamped = Math.max(-2000, Math.min(2000, valMg));
+    return midY - (clamped / 2000) * (height * 0.45);
+  }
+
+  // Draw Ax (Cyan)
+  ctx.beginPath();
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = '#38bdf8';
+  for (let i = 0; i < count; i++) {
+    const x = (i / (count - 1)) * width;
+    const y = toY(accelXHistory[startIdx + i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Draw Ay (Purple)
+  ctx.beginPath();
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = '#bc8cff';
+  for (let i = 0; i < count; i++) {
+    const x = (i / (count - 1)) * width;
+    const y = toY(accelYHistory[startIdx + i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Draw Az (Green)
+  ctx.beginPath();
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = '#3fb950';
+  for (let i = 0; i < count; i++) {
+    const x = (i / (count - 1)) * width;
+    const y = toY(accelZHistory[startIdx + i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Draw Motion Intensity (Gold with slight glow)
+  ctx.beginPath();
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = '#e3b341';
+  for (let i = 0; i < count; i++) {
+    const x = (i / (count - 1)) * width;
+    // Map motion 0 to 500 mg upwards from bottom
+    const mot = Math.min(500, motionHistory[startIdx + i]);
+    const y = (height - 6) - (mot / 500) * (height * 0.5);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+}
+

@@ -5,11 +5,11 @@
   border: 1px solid rgba(240, 246, 252, 0.1);
   height: 34px;
   padding: 0 14px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -19,13 +19,13 @@
 }
 .btn:hover {
   background: #2ea043;
-  box-shadow: 0 2px 8px rgba(46, 160, 67, 0.3);
+  box-shadow: 0 2px 10px rgba(46, 160, 67, 0.4);
 }
-.btn:active { transform: scale(0.98); }
+.btn:active { transform: scale(0.97); }
 .btn.disconnect { background: #da3633; }
 .btn.disconnect:hover {
   background: #f85149;
-  box-shadow: 0 2px 8px rgba(248, 81, 73, 0.3);
+  box-shadow: 0 2px 10px rgba(248, 81, 73, 0.4);
 }
 
 .btn-secondary {
@@ -33,19 +33,19 @@
   color: var(--text);
   border: 1px solid var(--border);
 }
-.btn-secondary:hover { background: var(--card-hover); color: #fff; }
+.btn-secondary:hover { background: var(--card-hover); color: #fff; border-color: rgba(255, 255, 255, 0.15); }
 .btn-secondary.active {
   background: #1f6feb;
   border-color: #388bfd;
   color: #fff;
-  box-shadow: 0 1px 6px rgba(31, 111, 235, 0.4);
+  box-shadow: 0 1px 8px rgba(31, 111, 235, 0.45);
 }
 
 .btn-pause {
   background: #8957e5;
   color: #fff;
 }
-.btn-pause:hover { background: #9e6cf7; box-shadow: 0 2px 8px rgba(137, 87, 229, 0.35); }
+.btn-pause:hover { background: #9e6cf7; box-shadow: 0 2px 10px rgba(137, 87, 229, 0.4); }
 .btn-pause.paused {
   background: #d29922;
   color: #000;
@@ -93,7 +93,7 @@
 .segmented-control .btn-secondary.active {
   background: #1f6feb;
   color: #fff;
-  box-shadow: 0 1px 4px rgba(31, 111, 235, 0.4);
+  box-shadow: 0 1px 6px rgba(31, 111, 235, 0.4);
 }
 
 .status-badge {
@@ -118,33 +118,26 @@
 }
 .dot.connected {
   background: var(--green-bright);
-  box-shadow: 0 0 10px var(--green-bright);
+  box-shadow: 0 0 12px var(--green-bright);
 }
 
-/* Metric Cards Grid - Perfectly Balanced Layout */
+/* Metric Cards Grid - Strictly Symmetric 2 Rows x 6 Columns Layout */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(6, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
 
-/* On standard / widescreen desktop: All 9 cards fit on 1 sleek row */
-@media (min-width: 1440px) {
+/* Tablet & Medium screens: Symmetric 3 rows of 4 */
+@media (max-width: 1200px) and (min-width: 768px) {
   .grid {
-    grid-template-columns: repeat(10, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
-/* On medium / laptop screens: 2 rows of 5 cards (perfect 2x5, zero orphans) */
-@media (min-width: 820px) and (max-width: 1439px) {
-  .grid {
-    grid-template-columns: repeat(5, 1fr);
-  }
-}
-
-/* On smaller / mobile screens: 2 columns */
-@media (max-width: 819px) {
+/* Mobile & Narrow screens: Symmetric 6 rows of 2 */
+@media (max-width: 767px) {
   .grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -152,22 +145,46 @@
 
 .card {
   background: var(--card-bg);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 10px 12px 10px;
+  border-radius: 12px;
+  padding: 13px 10px 11px 10px;
   text-align: center;
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 110px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  min-height: 112px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.18s ease, box-shadow 0.18s ease;
+  overflow: hidden;
 }
 .card:hover {
-  border-color: rgba(88, 166, 255, 0.4);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  border-color: rgba(88, 166, 255, 0.45);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transform: translateY(-2px);
+}
+
+/* Color Accent Bars on Card Tops */
+.card-finger { border-top: 3px solid #3fb950; }
+.card-hr { border-top: 3px solid #ff3366; }
+.card-spo2 { border-top: 3px solid #00f5d4; }
+.card-pi { border-top: 3px solid #38bdf8; }
+.card-hrv { border-top: 3px solid #bc8cff; }
+.card-resp { border-top: 3px solid #ff9e00; }
+.card-skintemp { border-top: 3px solid #ffd166; }
+.card-temp { border-top: 3px solid #79c0ff; }
+.card-bp { border-top: 3px solid #ec4899; }
+.card-press { border-top: 3px solid #06d6a0; }
+.card-tmp117 { border-top: 3px solid #58a6ff; }
+.card-hum { border-top: 3px solid #38bdf8; }
+.card-sleep { border-top: 3px solid #c77dff; }
+
+/* Dynamic Heart Beat Pulse on HR Card */
+.card-hr.beat {
+  border-top-color: #ff3366;
+  box-shadow: 0 0 24px rgba(255, 51, 102, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-3px) scale(1.02);
 }
 
 .card .label {
@@ -242,18 +259,19 @@
 }
 .widget-card {
   background: var(--card-bg);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px 18px;
+  border-radius: 12px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   min-height: 180px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  transition: border-color 0.15s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.2s ease;
 }
 .widget-card:hover {
-  border-color: rgba(88, 166, 255, 0.35);
+  border-color: rgba(88, 166, 255, 0.4);
 }
 .widget-header {
   display: flex;
@@ -262,7 +280,7 @@
   margin-bottom: 12px;
 }
 .widget-title {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--text-bright);
 }
@@ -279,7 +297,7 @@
   font-size: 12px;
   color: var(--text-dim);
   margin-top: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 /* SpO2 Clinical Range Meter */
@@ -364,17 +382,18 @@
 /* Chart Containers - strictly full width */
 .chart-container {
   background: var(--card-bg);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
+  border-radius: 12px;
+  padding: 16px 18px;
   margin-bottom: 18px;
   position: relative;
   width: 100%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: border-color 0.2s ease;
 }
 .chart-container:hover {
-  border-color: rgba(88, 166, 255, 0.3);
+  border-color: rgba(88, 166, 255, 0.35);
 }
 .chart-header {
   display: flex;
@@ -385,10 +404,13 @@
   gap: 8px;
 }
 .chart-title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-bright);
   letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .legend {
   display: flex;
@@ -405,11 +427,12 @@
 }
 canvas {
   width: 100% !important;
-  height: 180px;
+  height: 185px;
   display: block;
-  background: #090d13;
+  background: #06090e;
   border-radius: 8px;
-  border: 1px solid #21262d;
+  border: 1px solid #1a2332;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 .pause-overlay {
   position: absolute;
@@ -427,14 +450,14 @@ canvas {
 
 /* Terminal Log */
 .log-box {
-  background: #090d13;
+  background: #06090e;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-dim);
-  height: 200px;
+  height: 220px;
   overflow-y: auto;
   white-space: pre-wrap;
   line-height: 1.6;
@@ -459,3 +482,146 @@ canvas {
 .sleep-light { color: #38bdf8 !important; text-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
 .sleep-restless { color: #f85149 !important; text-shadow: 0 0 10px rgba(248, 81, 73, 0.4); }
 
+/* Sleep Posture 3D-Style Graphic Indicator */
+.posture-visualizer {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 12px;
+}
+
+.posture-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(188, 140, 255, 0.12);
+  border: 2px solid rgba(188, 140, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.posture-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.posture-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #bc8cff;
+}
+
+.posture-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.posture-angles {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #58a6ff;
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Actigraphy Hypnogram Stacked Bar */
+.hypnogram-container {
+  margin-top: 14px;
+}
+
+.hypnogram-bar {
+  display: flex;
+  height: 18px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #161b22;
+  border: 1px solid var(--border);
+}
+
+.hypno-seg-restful {
+  background: linear-gradient(90deg, #2ea043, #3fb950);
+  transition: width 0.3s ease;
+}
+
+.hypno-seg-light {
+  background: linear-gradient(90deg, #1f6feb, #38bdf8);
+  transition: width 0.3s ease;
+}
+
+.hypno-seg-restless {
+  background: linear-gradient(90deg, #f0883e, #f85149);
+  transition: width 0.3s ease;
+}
+
+.hypnogram-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+/* Sensor Topology List Table */
+.topology-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.topology-table th, .topology-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.topology-table th {
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.topology-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sensor-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.sensor-online { background: #3fb950; box-shadow: 0 0 8px #3fb950; }
+.sensor-offline { background: #f85149; box-shadow: 0 0 8px #f85149; }
+
+/* Shortcuts List */
+.shortcut-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.kbd-key {
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #58a6ff;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}

@@ -98,6 +98,7 @@ STM/
 │   ├── js/               # Modular DSP, chart renderers, audio engine, and CSV exporter
 │   └── README.md         # In-depth technical documentation for the web testbed
 ├── STMPulseX_App/        # Mobile & cross-platform BLE application architecture
+├── STMPulseX_Theory_and_Science.md # Complete scientific, physiological & DSP theory guide
 └── README.md             # Top-level system architecture and hardware specification
 ```
 

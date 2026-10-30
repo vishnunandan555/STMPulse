@@ -1,6 +1,7 @@
 // Telemetry Export & Clipboard Tools Module
 const logLines = [];
 const sessionRecords = [];
+let logRenderPending = false;
 
 function showToast(msg) {
   const copyToast = document.getElementById('copyToast');
@@ -10,14 +11,27 @@ function showToast(msg) {
   setTimeout(() => copyToast.classList.remove('show'), 2000);
 }
 
-function appendLog(line) {
-  logLines.push(line);
-  if (logLines.length > 1200) logLines.shift();
-
+function flushLogBox() {
+  logRenderPending = false;
   const logBox = document.getElementById('logBox');
   if (logBox) {
-    logBox.textContent += line + '\n';
+    const slice = logLines.slice(-150);
+    logBox.textContent = slice.join('\n');
     logBox.scrollTop = logBox.scrollHeight;
+  }
+  const miniLog = document.getElementById('miniLogText');
+  if (miniLog && logLines.length > 0) {
+    miniLog.textContent = logLines[logLines.length - 1];
+  }
+}
+
+function appendLog(line) {
+  logLines.push(line);
+  if (logLines.length > 2500) logLines.shift();
+
+  if (!logRenderPending) {
+    logRenderPending = true;
+    requestAnimationFrame(flushLogBox);
   }
 }
 
@@ -50,6 +64,8 @@ function clearLogs() {
   logLines.length = 0;
   const logBox = document.getElementById('logBox');
   if (logBox) logBox.textContent = '';
+  const miniLog = document.getElementById('miniLogText');
+  if (miniLog) miniLog.textContent = 'Logs cleared.';
   showToast('🗑 Cleared logs');
 }
 
@@ -112,4 +128,3 @@ function exportCSV() {
   document.body.removeChild(link);
   showToast(`✔ Exported ${sessionRecords.length} records!`);
 }
-

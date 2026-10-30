@@ -32,11 +32,10 @@ let rollingSpO2 = null;
 let rollingSystolic = null;
 let rollingDiastolic = null;
 
-// Respiration DSP Engine (Dual-Stage Moving Average Filter + Dynamic Normalization)
-const RESP_FILTER_LEN = 25; // Stage 1: Boxcar filter (1.0s at 25 Hz) to completely suppress cardiac ripples
-const RESP_BASE_LEN = 100;   // Stage 2: Sliding baseline window (4.0s at 25 Hz) for non-lagging DC tracking
+// Respiration DSP Engine (Smooth Cardiac Suppression Boxcar + Dynamic EMA Baseline Removal)
+const RESP_FILTER_LEN = 15; // ~0.6s at 25 Hz to eliminate cardiac pulse ripples while preserving thoracic wave
 const respFilterWindow = [];
-const respBaseWindow = [];
+let respBaseline = 0;
 const respACWindow = [];
 let lastBreathTime = 0;
 const breathIntervals = [];
@@ -133,9 +132,10 @@ function processTelemetry(ir, red, isFinger, ctemp) {
     dcTracker = ir;
 
     // Reset respiration DSP memory
+    respBaseline = 0;
     respFilterWindow.length = 0;
-    respBaseWindow.length = 0;
     respACWindow.length = 0;
+    breathIntervals.length = 0;
     breathPhase = 0;
     lastBreathTime = 0;
 
@@ -207,6 +207,7 @@ function processTelemetry(ir, red, isFinger, ctemp) {
           sessionHR.push(currentBPM);
           if (sessionHR.length > 500) sessionHR.shift();
           playPulseBeep(rollingSpO2);
+          if (typeof triggerHeartbeatVisual === "function") triggerHeartbeatVisual();
 
           // Update VO2 Max & 5-Zone Model
           updateVO2AndZones(currentBPM);
@@ -309,83 +310,89 @@ function processTelemetry(ir, red, isFinger, ctemp) {
     updateSpO2Gauge(roundedSpO2);
   }
 
-  // 4. Overhauled Respiration Rate Detection (Dual-Stage Filter + Adaptive Normalization)
-  respFilterWindow.push(ir);
-  if (respFilterWindow.length > RESP_FILTER_LEN) respFilterWindow.shift();
+  // 4. Clinical Respiration Waveform & Rate Detection Engine
+  if (respFilterWindow.length === 0) {
+    // Immediate pre-fill on finger contact to avoid any startup dead-time
+    for (let i = 0; i < RESP_FILTER_LEN; i++) respFilterWindow.push(ir);
+    respBaseline = ir;
+  } else {
+    respFilterWindow.push(ir);
+    if (respFilterWindow.length > RESP_FILTER_LEN) respFilterWindow.shift();
+  }
 
-  if (respFilterWindow.length >= RESP_FILTER_LEN) {
-    // Stage 1: Fast Boxcar Filter (~1.0s) attenuates cardiac pulse ripples
-    const respSmooth = respFilterWindow.reduce((a, b) => a + b, 0) / respFilterWindow.length;
+  // Fast moving average to strip away cardiac pulse ripples
+  const respSmooth = respFilterWindow.reduce((a, b) => a + b, 0) / respFilterWindow.length;
 
-    // Stage 2: Sliding Baseline Window (~4.0s) tracks true thoracic undulations without EMA lag
-    respBaseWindow.push(respSmooth);
-    if (respBaseWindow.length > RESP_BASE_LEN) respBaseWindow.shift();
+  // Track slow physiological DC baseline via non-lagging EMA (tau ~ 3.3s)
+  if (respBaseline === 0) {
+    respBaseline = respSmooth;
+  } else {
+    respBaseline = (0.988 * respBaseline) + (0.012 * respSmooth);
+  }
 
-    const respBase = respBaseWindow.reduce((a, b) => a + b, 0) / respBaseWindow.length;
-    const respAC = respSmooth - respBase;
+  // Pure Thoracic AC Respiration Waveform (centered exactly at 0)
+  const respAC = respSmooth - respBaseline;
+  respWaveform.shift();
+  respWaveform.push(respAC);
 
-    respWaveform.shift();
-    respWaveform.push(respAC);
+  // Track rolling amplitude of respiration for adaptive normalization
+  respACWindow.push(respAC);
+  if (respACWindow.length > 75) respACWindow.shift(); // ~3.0 seconds
 
-    // Track rolling amplitude of respiration for adaptive normalization
-    respACWindow.push(respAC);
-    if (respACWindow.length > 50) respACWindow.shift(); // ~2.0 seconds
+  let minAC = Infinity, maxAC = -Infinity;
+  for (let i = 0; i < respACWindow.length; i++) {
+    if (respACWindow[i] < minAC) minAC = respACWindow[i];
+    if (respACWindow[i] > maxAC) maxAC = respACWindow[i];
+  }
+  const acSpan = Math.max(16, maxAC - minAC);
+  const halfSpan = acSpan / 2;
 
-    let minAC = Infinity, maxAC = -Infinity;
-    for (let i = 0; i < respACWindow.length; i++) {
-      if (respACWindow[i] < minAC) minAC = respACWindow[i];
-      if (respACWindow[i] > maxAC) maxAC = respACWindow[i];
+  // Live Breathing Expansion Bar (smoothly adapts to any shallow or deep breathing depth)
+  if (breathBar) {
+    const breathPct = Math.max(5, Math.min(95, Math.round(50 + (respAC / halfSpan) * 45)));
+    breathBar.style.width = breathPct + '%';
+  }
+
+  // Adaptive hysteresis threshold (25% of current breathing amplitude, floor 8 counts)
+  const HYST = Math.max(8, acSpan * 0.25);
+  let newPhase = breathPhase;
+
+  if (respAC > HYST) {
+    newPhase = 1; // Inhaling
+    if (subResp) subResp.textContent = String.fromCodePoint(0x1F32C) + ' Inhaling...';
+  } else if (respAC < -HYST) {
+    newPhase = -1; // Exhaling
+    if (subResp) subResp.textContent = String.fromCodePoint(0x1F4A8) + ' Exhaling...';
+  } else {
+    if (lastBreathTime > 0 && (now - lastBreathTime > 4500)) {
+      if (subResp) subResp.textContent = 'Holding breath / Steady';
     }
-    const acSpan = Math.max(40, maxAC - minAC);
-    const halfSpan = acSpan / 2;
+  }
 
-    // Live Breathing Expansion Bar (smoothly adapts to any shallow or deep breathing depth)
-    if (breathBar) {
-      const breathPct = Math.max(5, Math.min(95, Math.round(50 + (respAC / halfSpan) * 45)));
-      breathBar.style.width = breathPct + '%';
-    }
+  // Detect full breath cycle transition from Exhale (-1) to Inhale (1)
+  if (breathPhase === -1 && newPhase === 1) {
+    if (lastBreathTime > 0) {
+      const breathDurationMs = now - lastBreathTime;
+      // Covers rapid panting (1.3s / 46 BrPM) to slow meditative breathing (16.0s / 3.75 BrPM)
+      if (breathDurationMs >= 1300 && breathDurationMs <= 16000) {
+        breathIntervals.push(breathDurationMs);
+        if (breathIntervals.length > 4) breathIntervals.shift();
 
-    // Adaptive hysteresis threshold (20% of current breathing amplitude, minimum 18 counts)
-    const HYST = Math.max(18, acSpan * 0.20);
-    let newPhase = breathPhase;
-
-    if (respAC > HYST) {
-      newPhase = 1; // Inhaling
-      if (subResp) subResp.textContent = String.fromCodePoint(0x1F32C) + ' Inhaling...';
-    } else if (respAC < -HYST) {
-      newPhase = -1; // Exhaling
-      if (subResp) subResp.textContent = String.fromCodePoint(0x1F4A8) + ' Exhaling...';
-    } else {
-      if (lastBreathTime > 0 && (now - lastBreathTime > 5500)) {
-        if (subResp) subResp.textContent = 'Holding breath / Steady';
+        const avgBreathMs = breathIntervals.reduce((a, b) => a + b, 0) / breathIntervals.length;
+        const brpm = Math.round(60000 / avgBreathMs);
+        if (valResp) valResp.textContent = brpm;
+        totalBreaths++;
       }
     }
+    lastBreathTime = now;
+  }
 
-    // Detect full breath cycle transition from Exhale (-1) to Inhale (1)
-    if (breathPhase === -1 && newPhase === 1) {
-      if (lastBreathTime > 0) {
-        const breathDurationMs = now - lastBreathTime;
-        // Covers rapid panting (1.3s / 46 BrPM) to slow meditative breathing (16.5s / 3.6 BrPM)
-        if (breathDurationMs >= 1300 && breathDurationMs <= 16500) {
-          breathIntervals.push(breathDurationMs);
-          if (breathIntervals.length > 4) breathIntervals.shift();
+  breathPhase = newPhase;
 
-          const avgBreathMs = breathIntervals.reduce((a, b) => a + b, 0) / breathIntervals.length;
-          const brpm = Math.round(60000 / avgBreathMs);
-          if (valResp) valResp.textContent = brpm;
-          totalBreaths++;
-        }
-      }
-      lastBreathTime = now;
-    }
-
-    breathPhase = newPhase;
-
-    // Display apnea warning if breath held > 16.5s
-    if (lastBreathTime > 0 && (now - lastBreathTime > 16500)) {
-      if (valResp) valResp.textContent = '--';
-      if (subResp) subResp.textContent = 'Breath Held / Apnea (>16s)';
-    }
+  // Display apnea warning if breath held > 16.5s
+  if (lastBreathTime > 0 && (now - lastBreathTime > 16500)) {
+    if (valResp) valResp.textContent = '--';
+    if (subResp) subResp.textContent = 'Breath Held / Apnea (>16s)';
   }
 }
 
@@ -543,11 +550,77 @@ function processIMUTelemetry(ax, ay, az, mot) {
     valSleepState.className = `value ${badgeClass}`;
   }
 
-  const valSleepPosture = document.getElementById('valSleepPosture');
+    const valSleepPosture = document.getElementById('valSleepPosture');
   if (valSleepPosture) valSleepPosture.textContent = posture;
 
   const valMotionIdx = document.getElementById('valMotionIdx');
   if (valMotionIdx) valMotionIdx.textContent = `${mot} mg`;
+
+  // Dynamic Orientation Angles (Roll, Pitch, Total Magnitude)
+  const rollDeg = Math.round(Math.atan2(ay, az) * 180 / Math.PI);
+  const pitchDeg = Math.round(Math.atan2(-ax, Math.sqrt(ay * ay + az * az)) * 180 / Math.PI);
+  const gMag = (Math.sqrt(ax * ax + ay * ay + az * az) / 1000).toFixed(2);
+
+  const postureRollVal = document.getElementById('postureRollVal');
+  if (postureRollVal) postureRollVal.textContent = `${rollDeg}°`;
+  const posturePitchVal = document.getElementById('posturePitchVal');
+  if (posturePitchVal) posturePitchVal.textContent = `${pitchDeg}°`;
+  const postureGMag = document.getElementById('postureGMag');
+  if (postureGMag) postureGMag.textContent = `${gMag} G`;
+  const postureAngleBadge = document.getElementById('postureAngleBadge');
+  if (postureAngleBadge) postureAngleBadge.textContent = `Roll: ${rollDeg}° | Pitch: ${pitchDeg}°`;
+
+  const postureIconWrap = document.getElementById('postureIconWrap');
+  if (postureIconWrap) postureIconWrap.style.transform = `rotate(${rollDeg}deg)`;
+
+  const postureIcon = document.getElementById('postureIcon');
+  const postureDisplayTitle = document.getElementById('postureDisplayTitle');
+  const postureDisplayDesc = document.getElementById('postureDisplayDesc');
+
+  if (postureDisplayTitle) postureDisplayTitle.textContent = posture;
+  if (postureIcon) {
+    if (posture.includes('Prone')) {
+      postureIcon.textContent = '🛌';
+      if (postureDisplayDesc) postureDisplayDesc.textContent = 'Ventral face-down position. Airway patency preserved, spinal rotation monitored.';
+    } else if (posture.includes('Left')) {
+      postureIcon.textContent = '↩️';
+      if (postureDisplayDesc) postureDisplayDesc.textContent = 'Left lateral decubitus. Optimal for venous return & gastric reflux mitigation.';
+    } else if (posture.includes('Right')) {
+      postureIcon.textContent = '↪️';
+      if (postureDisplayDesc) postureDisplayDesc.textContent = 'Right lateral position. Reduces nocturnal cardiac autonomic strain.';
+    } else if (posture.includes('Upright')) {
+      postureIcon.textContent = '🧍';
+      if (postureDisplayDesc) postureDisplayDesc.textContent = 'Trunk elevated > 45°. Patient sitting up or head of bed elevated.';
+    } else {
+      postureIcon.textContent = '🛏️';
+      if (postureDisplayDesc) postureDisplayDesc.textContent = 'Standard anatomical supine position with downward gravity vector alignment.';
+    }
+  }
+
+  // Actigraphy Hypnogram Session Breakdown
+  if (totalSleepSamples > 0) {
+    const restfulPct = Math.round((restfulSamples / totalSleepSamples) * 100);
+    const restlessPct = Math.min(100 - restfulPct, Math.round((sleepMotionEvents * 40 / totalSleepSamples) * 100));
+    const lightPct = Math.max(0, 100 - restfulPct - restlessPct);
+
+    const hypnoRestfulSeg = document.getElementById('hypnoRestfulSeg');
+    const hypnoLightSeg = document.getElementById('hypnoLightSeg');
+    const hypnoRestlessSeg = document.getElementById('hypnoRestlessSeg');
+
+    if (hypnoRestfulSeg) hypnoRestfulSeg.style.width = `${restfulPct}%`;
+    if (hypnoLightSeg) hypnoLightSeg.style.width = `${lightPct}%`;
+    if (hypnoRestlessSeg) hypnoRestlessSeg.style.width = `${restlessPct}%`;
+
+    const hypnoRestfulPct = document.getElementById('hypnoRestfulPct');
+    const hypnoLightPct = document.getElementById('hypnoLightPct');
+    const hypnoRestlessPct = document.getElementById('hypnoRestlessPct');
+    const hypnoRatioBadge = document.getElementById('hypnoRatioBadge');
+
+    if (hypnoRestfulPct) hypnoRestfulPct.textContent = `${restfulPct}%`;
+    if (hypnoLightPct) hypnoLightPct.textContent = `${lightPct}%`;
+    if (hypnoRestlessPct) hypnoRestlessPct.textContent = `${restlessPct}%`;
+    if (hypnoRatioBadge) hypnoRatioBadge.textContent = `${restfulPct}% Restful Sleep`;
+  }
 
   const valTossTurns = document.getElementById('valTossTurns');
   if (valTossTurns) valTossTurns.textContent = sleepMotionEvents;

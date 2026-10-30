@@ -146,17 +146,34 @@ setInterval(updateSessionStatsUI, 1000);
 
 // Telemetry Line Parser
 function parseDataLine(line) {
-  if (!line.includes('ENV:') && !line.includes('PULSE:')) return;
+  if (!line || !line.trim()) return;
+  const cleanLine = line.trim();
+  appendLog(cleanLine);
+
+  // Handle [STATUS] diagnostic broadcasts from STM32
+  if (cleanLine.includes("[STATUS]")) {
+    const badge = document.getElementById("sensorHealthBadge");
+    if (badge) {
+      badge.textContent = "SENSORS: 🟢 ONLINE";
+      badge.style.background = "rgba(63, 185, 80, 0.15)";
+      badge.style.color = "#3fb950";
+      badge.style.borderColor = "rgba(63, 185, 80, 0.3)";
+    }
+  }
+
+  if (!cleanLine.includes('ENV:') && !cleanLine.includes('PULSE:')) return;
   totalPackets++;
-  appendLog(line);
+
 
   // Match ENV: Temp, Hum, Press
   const envMatch = line.match(/ENV:\s*([0-9.-]+)\s*C,\s*([0-9.-]+)\s*%,\s*([0-9.-]+)\s*hPa/i);
   if (envMatch) {
     const valTemp = document.getElementById('valTemp');
+    const valHum = document.getElementById('valHum');
     const subHum = document.getElementById('subHum');
     const valPress = document.getElementById('valPress');
     if (valTemp) valTemp.textContent = envMatch[1];
+    if (valHum) valHum.textContent = envMatch[2];
     if (subHum) subHum.textContent = `Hum: ${envMatch[2]} %`;
     if (valPress) valPress.textContent = envMatch[3];
     currentEnvTemp = parseFloat(envMatch[1]);
@@ -282,10 +299,7 @@ function render() {
     if (rawRedCanvas && rawRedCanvas.offsetParent !== null) {
       drawSingleRawChart(rawRedCanvas, rawRedHistory, '#fb923c', false);
     }
-    const sleepCanvas = document.getElementById('sleepCanvas');
-    if (sleepCanvas && sleepCanvas.offsetParent !== null) {
-      drawSleepChart(sleepCanvas);
-    }
+    
     const rawDiffCanvas = document.getElementById('rawDiffCanvas');
     if (rawDiffCanvas && rawDiffCanvas.offsetParent !== null) {
       drawDiffChart(rawDiffCanvas, rawDiffHistory, '#bc8cff');
@@ -338,6 +352,10 @@ document.addEventListener('DOMContentLoaded', () => {
       statusText.textContent = 'Connected (25 Hz)';
       connectBtn.textContent = 'Disconnect';
       connectBtn.classList.add('disconnect');
+      const logBoxEl = document.getElementById('logBox');
+      if (logBoxEl) logBoxEl.textContent = '';
+      const miniLogEl = document.getElementById('miniLogText');
+      if (miniLogEl) miniLogEl.textContent = 'Connected @ 115200 baud. Waiting for first packet...';
       appendLog('>>> Connected to STM32 Virtual COM Port @ 115200 baud! <<<');
 
       keepReading = true;
@@ -369,4 +387,88 @@ document.addEventListener('DOMContentLoaded', () => {
       port = null;
     }
   });
+});
+
+// ============================================================================
+// UI Utilities: Heartbeat Animation, Fullscreen, Modals & Keyboard Shortcuts
+// ============================================================================
+function triggerHeartbeatVisual() {
+  const brandIcon = document.querySelector('.brand-icon');
+  if (brandIcon) {
+    brandIcon.classList.remove('pulsing');
+    void brandIcon.offsetWidth; // trigger reflow
+    brandIcon.classList.add('pulsing');
+  }
+  const hrCard = document.querySelector('.card-hr');
+  if (hrCard) {
+    hrCard.classList.remove('beat');
+    void hrCard.offsetWidth;
+    hrCard.classList.add('beat');
+    setTimeout(() => hrCard.classList.remove('beat'), 400);
+  }
+}
+
+function toggleFullscreen() {
+  const isFs = document.body.classList.toggle('fullscreen-mode');
+  const btn = document.getElementById('fullscreenBtn');
+  if (btn) {
+    btn.textContent = isFs ? '🗗 Normal' : '⛶ Fullscreen';
+    btn.classList.toggle('active', isFs);
+  }
+  if (isFs) {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  } else {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+}
+
+function openTopologyModal() {
+  const modal = document.getElementById('topologyModal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeTopologyModal() {
+  const modal = document.getElementById('topologyModal');
+  if (modal) modal.classList.remove('open');
+}
+
+function openShortcutsModal() {
+  const modal = document.getElementById('shortcutsModal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeShortcutsModal() {
+  const modal = document.getElementById('shortcutsModal');
+  if (modal) modal.classList.remove('open');
+}
+
+// Global Keyboard Navigation & Hotkeys
+window.addEventListener('keydown', (e) => {
+  if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    togglePause();
+  } else if (e.key >= '1' && e.key <= '6') {
+    const tabs = ['tab-overview', 'tab-cardio', 'tab-respiration', 'tab-optics', 'tab-environment', 'tab-telemetry'];
+    const idx = parseInt(e.key, 10) - 1;
+    if (tabs[idx]) switchTab(tabs[idx]);
+  } else if (e.key === 'm' || e.key === 'M') {
+    toggleAudio();
+  } else if (e.key === 'f' || e.key === 'F') {
+    toggleFullscreen();
+  } else if (e.key === 'e' || e.key === 'E') {
+    exportCSV();
+  } else if (e.key === 'c' || e.key === 'C') {
+    clearLogs();
+  } else if (e.key === '?' || e.key === '/') {
+    openShortcutsModal();
+  } else if (e.key === 'Escape') {
+    closeTopologyModal();
+    closeShortcutsModal();
+  }
 });

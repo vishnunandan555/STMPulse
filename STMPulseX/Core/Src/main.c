@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <stdarg.h>
+#include <math.h>
 #include "usbd_cdc_if.h"
 #include <string.h>
 #include "app_common.h"
@@ -105,6 +106,32 @@ static uint8_t max30102_read_fifo(uint32_t *red, uint32_t *ir);
 static void max30102_trigger_temp(void);
 static float max30102_get_temp(void);
 
+#define TMP117_ADDR          (0x48 << 1)
+#define TMP117_REG_TEMP      0x00
+#define TMP117_REG_CONFIG    0x01
+#define TMP117_REG_ID        0x0F
+
+#define MPU6050_ADDR_PRIMARY   (0x68 << 1)
+#define MPU6050_ADDR_SECONDARY (0x69 << 1)
+#define MPU6050_REG_SMPLRT     0x19
+#define MPU6050_REG_CONFIG     0x1A
+#define MPU6050_REG_GYRO_CFG   0x1B
+#define MPU6050_REG_ACCEL_CFG  0x1C
+#define MPU6050_REG_ACCEL_XOUT 0x3B
+#define MPU6050_REG_PWR_MGMT_1 0x6B
+#define MPU6050_REG_WHO_AM_I   0x75
+
+static uint8_t mpu6050_addr = (0x68 << 1);
+static uint8_t mpu6050_detected = 0;
+static uint8_t mpu6050_whoami = 0;
+
+static void i2c_bus_scan(void);
+static uint8_t tmp117_init(void);
+static float tmp117_read_temp(void);
+
+// static uint8_t mpu6050_init(void);
+// static uint8_t mpu6050_read_accel(int16_t *ax, int16_t *ay, int16_t *az);
+
 static uint32_t sample_count = 0;
 
 /* USER CODE END 0 */
@@ -153,8 +180,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_Delay(1500);  // Allow USB CDC to enumerate
 
+  i2c_bus_scan();
   bme280_init();
   max30102_init();
+  tmp117_init();
+  // mpu6050_init(); // Disabled
   /* USER CODE END 2 */
 
   /* while(LL_HSEM_1StepLock(HSEM, CFG_HW_CLK48_CONFIG_SEMID)); */
@@ -181,6 +211,7 @@ int main(void)
     static float s_press = 1013.25f;
     static float s_hum = 50.0f;
     static float s_ctemp = 32.0f;
+    static float s_t117 = 25.0f;
 
     uint32_t phase = sample_count % 25;
     if (phase == 1) {
@@ -200,11 +231,25 @@ int main(void)
     } else if (phase == 3) {
         // Read conversion (took ~29ms, 40ms has elapsed)
         s_ctemp = max30102_get_temp();
+    } else if (phase == 4) {
+        float t = tmp117_read_temp();
+        if (t > -100.0f) {
+            s_t117 = t;
+        }
     }
 
     // 2. Read MAX30102 sample
     uint32_t red_val = 0, ir_val = 0;
     max30102_read_fifo(&red_val, &ir_val);
+
+    if (sample_count % 125 == 0) {
+        usb_log("[STATUS] SENSORS ONLINE | TMP117: %.2f C | BME280: %.2f C, %.1f %% | MAX30102: OK\r\n",
+                s_t117, s_temp, s_hum);
+    }
+
+    // MPU6050 disabled (unpopulated)
+    int16_t ax_mg = 0, ay_mg = 0, az_mg = 0;
+    uint16_t mot_mg = 0;
 
     uint8_t finger_detected = (ir_val > 15000);
 
@@ -219,14 +264,20 @@ int main(void)
     long ct_frac = ct_c100 % 100;
     if (ct_frac < 0) ct_frac = -ct_frac;
 
-    usb_log("[#%lu] ENV: %ld.%02ld C, %ld.%02ld %%, %ld.%02ld hPa | PULSE: Finger=%s (RED=%lu, IR=%lu, CTEMP=%ld.%02ld C)\r\n",
+    long t117_c100 = (long)(s_t117 * 100.0f);
+    long t117_frac = t117_c100 % 100;
+    if (t117_frac < 0) t117_frac = -t117_frac;
+
+    usb_log("[#%lu] ENV: %ld.%02ld C, %ld.%02ld %%, %ld.%02ld hPa | PULSE: Finger=%s (RED=%lu, IR=%lu, CTEMP=%ld.%02ld C) | TMP117: %ld.%02ld C | IMU: Ax=%d, Ay=%d, Az=%d, Mot=%u\r\n",
             sample_count,
             t_c100 / 100, t_frac,
             h_pct100 / 100, h_pct100 % 100,
             p_hpa100 / 100, p_hpa100 % 100,
             finger_detected ? "YES" : "NO ",
             red_val, ir_val,
-            ct_c100 / 100, ct_frac);
+            ct_c100 / 100, ct_frac,
+            t117_c100 / 100, t117_frac,
+            (int)ax_mg, (int)ay_mg, (int)az_mg, (unsigned int)mot_mg);
 
     // 3. Broadcast 12-byte BLE telemetry notification at 1 Hz
     if (phase == 1) {
@@ -684,7 +735,7 @@ static float bme280_humidity(uint32_t adc_H)
 
 static void usb_log(const char *fmt, ...)
 {
-    char buf[192];
+    static char buf[256];
     va_list args;
     va_start(args, fmt);
     int len = vsnprintf(buf, sizeof(buf), fmt, args);
@@ -692,8 +743,11 @@ static void usb_log(const char *fmt, ...)
 
     if (len > 0) {
         if (len > (int)(sizeof(buf) - 1)) len = sizeof(buf) - 1;
-        CDC_Transmit_FS((uint8_t *)buf, (uint16_t)len);
-        HAL_Delay(10);
+        uint32_t t0 = HAL_GetTick();
+        while (CDC_Transmit_FS((uint8_t *)buf, (uint16_t)len) == USBD_BUSY) {
+            if (HAL_GetTick() - t0 > 15) break;
+            HAL_Delay(1);
+        }
     }
 }
 
@@ -757,6 +811,114 @@ static float max30102_get_temp(void)
     HAL_I2C_Mem_Read(&hi2c1, MAX30102_ADDR, 0x20, 1, &temp_frac, 1, 50);
     return (float)temp_int + ((float)(temp_frac & 0x0F) * 0.0625f);
 }
+
+static void i2c_bus_scan(void)
+{
+    usb_log("\r\n--- I2C Bus Scan (hi2c1: PB6 SCL, PB7 SDA) ---\r\n");
+    uint8_t found = 0;
+    for (uint16_t addr = 1; addr < 128; addr++) {
+        if (HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(addr << 1), 2, 10) == HAL_OK) {
+            const char *name = "Unknown";
+            if (addr == 0x48) name = "TMP117 (0x48)";
+            else if (addr == 0x49) name = "TMP117 (0x49)";
+            else if (addr == 0x57) name = "MAX30102 (0x57)";
+            else if (addr == 0x68) name = "MPU6050 (0x68)";
+            else if (addr == 0x69) name = "MPU6050 (0x69)";
+            else if (addr == 0x76) name = "BME280 (0x76)";
+            else if (addr == 0x77) name = "BME280 (0x77)";
+            usb_log("  -> [0x%02X] ACK (%s)\r\n", addr, name);
+            found++;
+        }
+    }
+    if (found == 0) {
+        usb_log("  -> No I2C devices found! Check wiring and 3.3V/GND.\r\n");
+    }
+    usb_log("----------------------------------------------\r\n\r\n");
+}
+
+static uint8_t tmp117_init(void)
+{
+    return (HAL_I2C_IsDeviceReady(&hi2c1, TMP117_ADDR, 2, 20) == HAL_OK) ? 1 : 0;
+}
+
+static float tmp117_read_temp(void)
+{
+    uint8_t buf[2];
+    if (HAL_I2C_Mem_Read(&hi2c1, TMP117_ADDR, TMP117_REG_TEMP, 1, buf, 2, 20) != HAL_OK) {
+        return -999.0f;
+    }
+    int16_t raw = (int16_t)(((uint16_t)buf[0] << 8) | buf[1]);
+    return (float)raw * 0.0078125f;
+}
+
+static uint8_t __attribute__((unused)) mpu6050_init(void)
+{
+    uint8_t target_addr = 0;
+    // Check 0x68 first (AD0 -> GND)
+    if (HAL_I2C_IsDeviceReady(&hi2c1, MPU6050_ADDR_PRIMARY, 2, 15) == HAL_OK) {
+        target_addr = MPU6050_ADDR_PRIMARY;
+    }
+    // Check 0x69 second (AD0 -> 3.3V or floating)
+    else if (HAL_I2C_IsDeviceReady(&hi2c1, MPU6050_ADDR_SECONDARY, 2, 15) == HAL_OK) {
+        target_addr = MPU6050_ADDR_SECONDARY;
+    }
+
+    if (target_addr == 0) {
+        mpu6050_detected = 0;
+        return 0;
+    }
+
+    mpu6050_addr = target_addr;
+
+    // Wake up MPU6050: write 0x00 to PWR_MGMT_1 (clear SLEEP bit, 8MHz internal osc)
+    uint8_t pwr_wake = 0x00;
+    HAL_I2C_Mem_Write(&hi2c1, mpu6050_addr, MPU6050_REG_PWR_MGMT_1, 1, &pwr_wake, 1, 25);
+    HAL_Delay(10);
+
+    // Read WHO_AM_I register (0x75)
+    uint8_t who = 0;
+    if (HAL_I2C_Mem_Read(&hi2c1, mpu6050_addr, 0x75, 1, &who, 1, 25) == HAL_OK) {
+        mpu6050_whoami = who;
+    }
+
+    // Switch to PLL with X gyro clock for best stability
+    uint8_t pwr_pll = 0x01;
+    HAL_I2C_Mem_Write(&hi2c1, mpu6050_addr, MPU6050_REG_PWR_MGMT_1, 1, &pwr_pll, 1, 25);
+    HAL_Delay(5);
+
+    // DLPF = 3 (44 Hz low-pass filter for clean motion signals)
+    uint8_t dlpf = 0x03;
+    HAL_I2C_Mem_Write(&hi2c1, mpu6050_addr, MPU6050_REG_CONFIG, 1, &dlpf, 1, 25);
+
+    // Accel range = +/- 2g (16384 LSB/g)
+    uint8_t a_cfg = 0x00;
+    HAL_I2C_Mem_Write(&hi2c1, mpu6050_addr, MPU6050_REG_ACCEL_CFG, 1, &a_cfg, 1, 25);
+
+    // Gyro range = +/- 250 deg/s
+    uint8_t g_cfg = 0x00;
+    HAL_I2C_Mem_Write(&hi2c1, mpu6050_addr, MPU6050_REG_GYRO_CFG, 1, &g_cfg, 1, 25);
+
+    mpu6050_detected = 1;
+    return 1;
+}
+
+static uint8_t __attribute__((unused)) mpu6050_read_accel(int16_t *ax, int16_t *ay, int16_t *az)
+{
+    if (!mpu6050_detected) {
+        *ax = 0; *ay = 0; *az = 1000;
+        return 0;
+    }
+    uint8_t raw[6];
+    if (HAL_I2C_Mem_Read(&hi2c1, mpu6050_addr, MPU6050_REG_ACCEL_XOUT, 1, raw, 6, 20) != HAL_OK) {
+        *ax = 0; *ay = 0; *az = 1000;
+        return 0;
+    }
+    *ax = (int16_t)(((uint16_t)raw[0] << 8) | raw[1]);
+    *ay = (int16_t)(((uint16_t)raw[2] << 8) | raw[3]);
+    *az = (int16_t)(((uint16_t)raw[4] << 8) | raw[5]);
+    return 1;
+}
+
 /* USER CODE END 4 */
 
 /**

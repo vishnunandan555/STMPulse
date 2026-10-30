@@ -3,6 +3,7 @@ const MAX_BUFFER = 300;
 const waveform = new Array(MAX_BUFFER).fill(0);
 const rawIRHistory = new Array(MAX_BUFFER).fill(0);
 const rawRedHistory = new Array(MAX_BUFFER).fill(0);
+const rawDiffHistory = new Array(MAX_BUFFER).fill(0);
 const respWaveform = new Array(MAX_BUFFER).fill(0);
 
 // DC baseline tracker for AC pulse extraction
@@ -66,6 +67,8 @@ function processTelemetry(ir, red, isFinger, ctemp) {
   rawIRHistory.push(ir);
   rawRedHistory.shift();
   rawRedHistory.push(red);
+  rawDiffHistory.shift();
+  rawDiffHistory.push(ir - red);
 
   const valBPM = document.getElementById('valBPM');
   const subBPM = document.getElementById('subBPM');

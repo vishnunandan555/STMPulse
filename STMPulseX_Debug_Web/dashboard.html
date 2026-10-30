@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>STMPulseX — Developer Biosignal Suite & Diagnostic Testbed</title>
-  <link rel="stylesheet" href="css/main.css?v=2.4">
-  <link rel="stylesheet" href="css/components.css?v=2.4">
+  <link rel="stylesheet" href="css/main.css?v=2.5">
+  <link rel="stylesheet" href="css/components.css?v=2.5">
 </head>
 <body>
 
@@ -292,6 +292,19 @@
           <div class="pause-overlay">PAUSED</div>
         </div>
       </div>
+<div class="chart-container">
+        <div class="chart-header">
+          <div class="chart-title">Differential Optical Channel (&Delta; = IR &minus; Red Photodiode Counts)</div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: var(--purple);"></span> Optical Delta &Delta; (Purple)</div>
+            <div style="color: var(--text-dim);">Dynamic Autoscaled (Differential Absorption)</div>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="rawDiffCanvas" width="900" height="180"></canvas>
+          <div class="pause-overlay">PAUSED</div>
+        </div>
+      </div>
     </section>
 
     <!-- ==================== TAB 5: ENVIRONMENTAL & THERMALS ==================== -->
@@ -342,10 +355,10 @@
   </main>
 
   <!-- Modular Scripts -->
-  <script src="js/audio.js?v=2.2"></script>
-  <script src="js/export.js?v=2.2"></script>
-  <script src="js/charts.js?v=2.2"></script>
-  <script src="js/dsp.js?v=2.3"></script>
-  <script src="js/app.js?v=2.2"></script>
+  <script src="js/audio.js?v=2.5"></script>
+  <script src="js/export.js?v=2.5"></script>
+  <script src="js/charts.js?v=2.5"></script>
+  <script src="js/dsp.js?v=2.5"></script>
+  <script src="js/app.js?v=2.5"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-﻿// Application State, WebSerial Communication & UI Navigation Controller
+// Application State, WebSerial Communication & UI Navigation Controller
 let port = null;
 let reader = null;
 let keepReading = false;
@@ -247,6 +247,10 @@ function render() {
     const rawRedCanvas = document.getElementById('rawRedCanvas');
     if (rawRedCanvas && rawRedCanvas.offsetParent !== null) {
       drawSingleRawChart(rawRedCanvas, rawRedHistory, '#fb923c', false);
+    }
+    const rawDiffCanvas = document.getElementById('rawDiffCanvas');
+    if (rawDiffCanvas && rawDiffCanvas.offsetParent !== null) {
+      drawDiffChart(rawDiffCanvas, rawDiffHistory, '#bc8cff');
     }
   }
   requestAnimationFrame(render);

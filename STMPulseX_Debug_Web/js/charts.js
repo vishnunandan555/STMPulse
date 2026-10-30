@@ -1,6 +1,7 @@
 // High-Performance HTML5 Canvas Rendering Engine with HiDPI Resolution & Aspect-Ratio Normalization
 let irScaleMin = 0, irScaleMax = 10000;
 let redScaleMin = 0, redScaleMax = 10000;
+let diffScaleMin = -5000, diffScaleMax = 5000;
 
 const TREND_POINTS = 60;
 const trendBPM = new Array(TREND_POINTS).fill(null);
@@ -308,6 +309,117 @@ function drawSingleRawChart(canvas, history, strokeColor, isIR) {
   ctx.lineTo(width, height);
   ctx.lineTo(0, height);
   ctx.fillStyle = isIR ? 'rgba(56, 189, 248, 0.05)' : 'rgba(251, 146, 60, 0.05)';
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * 3b. Differential Optical Channel (Raw IR - Raw Red)
+ */
+function drawDiffChart(canvas, history, strokeColor) {
+  const prep = prepareCanvas(canvas);
+  if (!prep) return;
+  const { ctx, width, height } = prep;
+
+  ctx.fillStyle = '#090d13';
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = '#161e27';
+  ctx.lineWidth = 1;
+  for (let y = 30; y < height; y += 30) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  const pointsCount = Math.min(MAX_BUFFER, (typeof windowSamples !== 'undefined' ? windowSamples : visiblePoints) || 100);
+  const startIdx = MAX_BUFFER - pointsCount;
+
+  let minVal = Infinity, maxVal = -Infinity;
+  let count = 0;
+  for (let i = startIdx; i < MAX_BUFFER; i++) {
+    const v = history[i];
+    if (v < minVal) minVal = v;
+    if (v > maxVal) maxVal = v;
+    count++;
+  }
+
+  let targetMin, targetMax;
+  if (count >= 5 && isFinite(minVal) && isFinite(maxVal)) {
+    const actualSpan = maxVal - minVal;
+    const span = Math.max(300, actualSpan);
+    const margin = span * 0.15;
+    const mid = (maxVal + minVal) / 2;
+    targetMin = Math.floor(mid - (span / 2) - margin);
+    targetMax = Math.ceil(mid + (span / 2) + margin);
+  } else {
+    targetMin = -5000;
+    targetMax = 5000;
+  }
+
+  if (Math.abs(targetMin - diffScaleMin) > 40000 || (diffScaleMax - diffScaleMin) > 50000) {
+    diffScaleMin = targetMin;
+    diffScaleMax = targetMax;
+  } else {
+    diffScaleMin += 0.22 * (targetMin - diffScaleMin);
+    diffScaleMax += 0.22 * (targetMax - diffScaleMax);
+  }
+
+  const range = (diffScaleMax - diffScaleMin) || 1;
+  const padding = 20;
+
+  // Center dashed midline
+  ctx.strokeStyle = 'rgba(139, 148, 158, 0.22)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, height / 2);
+  ctx.lineTo(width, height / 2);
+  ctx.stroke();
+
+  // Draw 0-reference line if within range
+  if (0 >= diffScaleMin && 0 <= diffScaleMax) {
+    const zeroNorm = (0 - diffScaleMin) / range;
+    const zeroY = (height - padding) - (zeroNorm * (height - 2 * padding));
+    ctx.strokeStyle = 'rgba(188, 140, 255, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(0, zeroY);
+    ctx.lineTo(width, zeroY);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Axis text labels
+  const avg = (diffScaleMax + diffScaleMin) / 2;
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", monospace';
+  ctx.fillText('Max: ' + (Math.round(diffScaleMax) >= 0 ? '+' : '') + Math.round(diffScaleMax).toLocaleString(), 8, 16);
+  ctx.fillText('Mid: ' + (Math.round(avg) >= 0 ? '+' : '') + Math.round(avg).toLocaleString(), 8, height / 2 - 4);
+  ctx.fillText('Min: ' + (Math.round(diffScaleMin) >= 0 ? '+' : '') + Math.round(diffScaleMin).toLocaleString(), 8, height - 8);
+
+  const deltaSpan = Math.round(diffScaleMax - diffScaleMin);
+  ctx.textAlign = 'right';
+  ctx.fillText(`Window: ±${Math.round(deltaSpan / 2).toLocaleString()} counts (${(pointsCount / 25).toFixed(1)}s)`, width - 10, 16);
+  ctx.textAlign = 'left';
+
+  // Curve
+  ctx.beginPath();
+  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = strokeColor;
+  for (let i = startIdx; i < MAX_BUFFER; i++) {
+    const x = ((i - startIdx) / (pointsCount - 1)) * width;
+    const norm = (history[i] - diffScaleMin) / range;
+    const y = (height - padding) - (norm * (height - 2 * padding));
+    if (i === startIdx) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Shaded area
+  ctx.lineTo(width, height);
+  ctx.lineTo(0, height);
+  ctx.fillStyle = 'rgba(188, 140, 255, 0.05)';
   ctx.fill();
 
   ctx.restore();

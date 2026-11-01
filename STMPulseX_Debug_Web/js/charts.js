@@ -10,6 +10,111 @@ const trendSpO2 = new Array(TREND_POINTS).fill(null);
 let lastTrendTime = 0;
 
 /**
+ * HiDPI & Responsive Canvas Resolution Synchronizer
+ * Eliminates raster stretching and keeps text and waveforms razor-sharp
+ * regardless of monitor DPI, browser zoom, or window resizing.
+ */
+function prepareCanvas(canvas) {
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const displayW = Math.round(rect.width);
+  const displayH = Math.round(rect.height || 180);
+
+  // If container is hidden (e.g., inactive tab), skip render
+  if (displayW <= 0 || displayH <= 0) return null;
+
+  const targetW = Math.round(displayW * dpr);
+  const targetH = Math.round(displayH * dpr);
+
+  if (canvas.width !== targetW || canvas.height !== targetH) {
+    canvas.width = targetW;
+    canvas.height = targetH;
+  }
+
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  // Map drawing coordinates to CSS logical pixels
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, width: displayW, height: displayH };
+}
+
+/**
+ * 1. Photoplethysmogram (PPG) Pulse Waveform
+ */
+function drawPPGChart(canvas) {
+  const prep = prepareCanvas(canvas);
+  if (!prep) return;
+  const { ctx, width, height } = prep;
+
+  ctx.fillStyle = '#090d13';
+  ctx.fillRect(0, 0, width, height);
+
+  // Background grid
+  ctx.strokeStyle = '#161e27';
+  ctx.lineWidth = 1;
+  for (let y = 30; y < height; y += 30) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  const pointsCount = Math.min(MAX_BUFFER, (typeof windowSamples !== 'undefined' ? windowSamples : visiblePoints) || 100);
+  const startIdx = MAX_BUFFER - pointsCount;
+
+  let min = Infinity, max = -Infinity;
+  for (let i = startIdx; i < MAX_BUFFER; i++) {
+    if (waveform[i] < min) min = waveform[i];
+    if (waveform[i] > max) max = waveform[i];
+  }
+
+  if (max - min < 200) {
+    const mid = (max + min) / 2;
+    min = mid - 100;
+    max = mid + 100;
+  }
+
+  const range = (max - min) || 1;
+  const padding = 20;
+
+  // Header / Scale text (rendered crisp with zero distortion)
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", monospace';
+  ctx.fillText('Peak AC: +' + Math.round(max), 8, 16);
+  ctx.fillText('Trough AC: ' + Math.round(min), 8, height - 8);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#f85149';
+  ctx.fillText(`PPG Pulse Trace (${(pointsCount / 25).toFixed(1)}s window)`, width - 10, 16);
+  ctx.textAlign = 'left';
+
+  // Pulsatile line
+  ctx.beginPath();
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = '#f85149';
+  ctx.lineJoin = 'round';
+
+  for (let i = startIdx; i < MAX_BUFFER; i++) {
+    const x = ((i - startIdx) / (pointsCount - 1)) * width;
+    const norm = (waveform[i] - min) / range;
+    const y = (height - padding) - (norm * (height - 2 * padding));
+
+    if (i === startIdx) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Gradient area fill
+  ctx.lineTo(width, height);
+  ctx.lineTo(0, height);
+  ctx.fillStyle = 'rgba(248, 81, 73, 0.08)';
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
  * 2. Respiration Sine Waveform (0.15–0.35 Hz)
  */
 function drawRespChart(canvas) {

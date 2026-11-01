@@ -25,8 +25,11 @@ let lastAx = 0, lastAy = 0, lastAz = 1000, lastMot = 0;
 let dcTracker = 0;
 const filterAlpha = 0.96;
 
-// Cardiac peak & HRV tracking
+// Cardiac peak & HRV tracking (Adaptive Dicrotic Notch Rejection)
 let lastPeakTime = 0;
+let adaptivePeak = 400; // Rolling estimated systolic peak amplitude
+let dynamicThreshold = 180; // Current amplitude threshold
+let runningIBI = 800; // Rolling estimated Inter-Beat Interval in ms (~75 BPM default)
 const peakIntervals = []; // Inter-Beat Intervals (ms)
 let rollingSpO2 = null;
 let rollingSystolic = null;
@@ -131,6 +134,12 @@ function processTelemetry(ir, red, isFinger, ctemp) {
     rollingSpO2 = null;
     dcTracker = ir;
 
+    lastPeakTime = 0;
+    adaptivePeak = 400;
+    dynamicThreshold = 180;
+    runningIBI = 800;
+    peakIntervals.length = 0;
+
     // Reset respiration DSP memory
     respBaseline = 0;
     respFilterWindow.length = 0;
@@ -185,23 +194,65 @@ function processTelemetry(ir, red, isFinger, ctemp) {
   waveform.shift();
   waveform.push(ac);
 
-  // 1. Peak Detection & BPM
+  if (subBPM && subBPM.textContent === 'No finger') {
+    subBPM.textContent = 'Detecting pulse...';
+  }
+
+  // 1. Clinical-Grade Adaptive Systolic Peak Detection (Deadlock-Free with Dicrotic Notch Rejection)
   const now = performance.now();
   const n = waveform.length;
-  if (n > 5 && waveform[n-3] > 80) {
-    if (waveform[n-3] > waveform[n-4] && waveform[n-3] > waveform[n-2]) {
-      if (lastPeakTime > 0) {
-        const deltaMs = now - lastPeakTime;
-        // Valid human HR between 40 BPM (1500ms) and 180 BPM (333ms)
-        if (deltaMs > 330 && deltaMs < 1500) {
-          const bpm = Math.round(60000 / deltaMs);
-          peakIntervals.push(deltaMs);
-          if (peakIntervals.length > 8) peakIntervals.shift();
+  const v = waveform[n-3]; // 2-sample lookahead (80 ms) for true local apex
 
-          const avgInterval = peakIntervals.reduce((a, b) => a + b) / peakIntervals.length;
-          const currentBPM = Math.round(60000 / avgInterval);
+  // A. Auto-Calibrate Peak Envelope from recent window to prevent contact-surge deadlock
+  // Scan positive peak amplitude in recent 2.4s window (60 samples)
+  let windowMax = 0;
+  for (let k = n - 60; k < n; k++) {
+    if (waveform[k] > windowMax) windowMax = waveform[k];
+  }
+  if (windowMax > 80 && adaptivePeak > windowMax * 1.30) {
+    adaptivePeak = windowMax * 1.15; // Smoothly reel down if bloated by an old touch artifact
+  }
+
+  // B. Adaptive Time-Decaying Threshold (High post-systole to block dicrotic wave, decaying to stay sensitive)
+  const timeSinceLastPeak = lastPeakTime > 0 ? (now - lastPeakTime) : 1000;
+  const decayRatio = Math.max(0.38, 0.65 - (Math.min(1200, timeSinceLastPeak) / 1200) * 0.27);
+  dynamicThreshold = Math.max(60, adaptivePeak * decayRatio);
+
+  // C. Dynamic Physiological Refractory Lockout (min 320ms, max 650ms, 52% of running IBI)
+  const refractoryMs = Math.max(320, Math.min(650, runningIBI * 0.52));
+
+  // D. Peak Validation Criteria
+  const isLocalApex = (v > waveform[n-4] && v > waveform[n-2]);
+  const isAboveThreshold = (v > dynamicThreshold);
+  const isRising = (v > waveform[n-5]); // Gentle positive upslope
+
+  if (n > 6 && isLocalApex && isAboveThreshold && isRising) {
+    if (lastPeakTime > 0) {
+      const deltaMs = now - lastPeakTime;
+
+      // In-range beat (33 to 187 BPM)
+      if (deltaMs >= refractoryMs && deltaMs <= 1800) {
+        // Dicrotic notch harmonic check (drops secondary reflections)
+        const isHarmonicArtifact = (deltaMs < 0.58 * runningIBI && v < 0.75 * adaptivePeak);
+
+        if (!isHarmonicArtifact) {
+          peakIntervals.push(deltaMs);
+          if (peakIntervals.length > 7) peakIntervals.shift();
+
+          // Outlier-resistant Median IBI calculation
+          const sortedIBI = [...peakIntervals].sort((a, b) => a - b);
+          const medianIBI = sortedIBI[Math.floor(sortedIBI.length / 2)];
+
+          // Smooth exponential IBI tracking
+          runningIBI = (0.75 * runningIBI) + (0.25 * medianIBI);
+          const currentBPM = Math.round(60000 / runningIBI);
+
           if (valBPM) valBPM.textContent = currentBPM;
           if (subBPM) subBPM.textContent = `IBI: ${Math.round(deltaMs)} ms`;
+
+          // Track systolic peak envelope
+          adaptivePeak = (0.70 * adaptivePeak) + (0.30 * v);
+          lastPeakTime = now;
 
           totalBeats++;
           sessionHR.push(currentBPM);
@@ -209,11 +260,11 @@ function processTelemetry(ir, red, isFinger, ctemp) {
           playPulseBeep(rollingSpO2);
           if (typeof triggerHeartbeatVisual === "function") triggerHeartbeatVisual();
 
-          // Update VO2 Max & 5-Zone Model
+          // Update VO2 Max & 5-Zone Model & BP
           updateVO2AndZones(currentBPM);
           updateEstimatedBP(currentBPM, typeof pi !== 'undefined' ? pi : 2.0);
 
-          // 2. HRV (RMSSD in ms) Calculation -> Mood & Stress
+          // 2. Clinically authentic HRV (RMSSD in ms) Calculation -> Mood & Stress
           if (peakIntervals.length >= 4) {
             let sumSqDiff = 0;
             for (let i = 0; i < peakIntervals.length - 1; i++) {
@@ -239,8 +290,15 @@ function processTelemetry(ir, red, isFinger, ctemp) {
             }
           }
         }
+      } else if (deltaMs > 1800) {
+        // Resync anchor after missed beats / pause / motion artifact (prevents permanent lockout!)
+        lastPeakTime = now;
+        adaptivePeak = (0.60 * adaptivePeak) + (0.40 * v);
       }
+    } else {
+      // First beat ever
       lastPeakTime = now;
+      adaptivePeak = v;
     }
   }
 
